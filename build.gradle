@@ -1,0 +1,29 @@
+buildscript{
+    apply from: '../common-versions/versions/versions_external.gradle'
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath "com.android.tools.build:gradle:${android_gradle_plugin_version}"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlin_version}"
+        classpath "org.jfrog.buildinfo:build-info-extractor-gradle:$artifactory_version"
+        classpath "org.asciidoctor:asciidoctor-gradle-jvm:$asciidoctor_version"
+    }
+}
+
+plugins {
+    id 'maven-publish'
+    id 'com.jfrog.artifactory' version "${artifactory_version}"
+    id 'org.asciidoctor.jvm.convert' version "$asciidoctor_version"
+    id 'org.jetbrains.dokka' version "$dokka_version"
+}
+
+
+apply from: '../common-versions/versioning.gradle'
+
+tasks.dokkaHtmlMultiModule.configure {
+    outputDirectory = file("$buildDir/dokka")
+    moduleName.set("NFC Adapter for Android")
+    includes.from("module.md")
+}
