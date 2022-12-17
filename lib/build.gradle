@@ -55,13 +55,10 @@ dependencies {
     implementation "androidx.room:room-ktx:$room_version"
     kapt "androidx.room:room-compiler:$room_version"
 
-//    implementation("com.ingonoka:utils-lib:$utils_mp_version")  { transitive = false }
-//    implementation("com.ingonoka:hexutils-lib-android:${hexutils_mp_version}") { transitive = false }
-
 }
 
 task sourceJar(type: Jar) {
-    from android.sourceSets.main.java.srcDirs
+    from android.sourceSets.main.kotlin.srcDirs
     classifier 'sources'
 }
 
@@ -101,7 +98,7 @@ publishing {
     repositories {
         maven {
             name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/")
+            url = uri("https://maven.pkg.github.com/ingonoka/cba9-driver")
             credentials {
                 username = System.getenv("USERNAME")
                 password = System.getenv("TOKEN")
