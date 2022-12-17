@@ -1,30 +1,87 @@
-buildscript{
-    apply from: '../common-versions/versions/versions_external.gradle'
+buildscript {
+//    apply from: '../common-versions/versions/versions_external.gradle'
+
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath "com.android.tools.build:gradle:${android_gradle_plugin_version}"
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlin_version}"
-        classpath "org.jfrog.buildinfo:build-info-extractor-gradle:$artifactory_version"
+        classpath "com.android.tools.build:gradle:$android_gradle_plugin_version"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
         classpath "org.asciidoctor:asciidoctor-gradle-jvm:$asciidoctor_version"
     }
 }
 
 plugins {
+
     id 'maven-publish'
-    id 'com.jfrog.artifactory' version "${artifactory_version}"
     id 'org.asciidoctor.jvm.convert' version "$asciidoctor_version"
     id 'org.jetbrains.dokka' version "$dokka_version"
     id 'org.jetbrains.kotlin.android' version '1.7.20' apply false
 }
 
+ext {
+    domain = 'com.ingonoka'
 
-apply from: '../common-versions/versioning.gradle'
+    pom_developer = "Ingo Noka"
+    pom_licenseName = "Attribution-NonCommercial-NoDerivatives 4.0 International (CC BY-NC-ND 4.0)"
+    pom_licenseUrl = "https://creativecommons.org/licenses/by-nc-nd/4.0/"
+
+    getVersionCode = { ->
+        try {
+            def stdout = new ByteArrayOutputStream()
+            exec {
+                commandLine 'git', 'rev-list', '--first-parent', '--count', 'master'
+                standardOutput = stdout
+            }
+            return Integer.parseInt(stdout.toString().trim())
+        }
+        catch (ignored) {
+            return -1
+        }
+    }
+
+    getVersionName = { ->
+        try {
+            def stdout = new ByteArrayOutputStream()
+            exec {
+                commandLine 'git', 'describe', '--tags', '--long'
+                standardOutput = stdout
+            }
+            return stdout.toString().trim()
+        }
+        catch (ignored) {
+            return null
+        }
+    }
+
+//    getVersionCode()
+
+}
+
+//version = getVersionName()
+//group = domain
 
 tasks.dokkaHtmlMultiModule.configure {
     outputDirectory = file("$buildDir/dokka")
     moduleName.set("NFC Adapter for Android")
     includes.from("module.md")
+}
+
+
+asciidoctorj {
+    modules {
+        diagram.use()
+    }
+    logLevel LogLevel.ERROR
+}
+
+asciidoctor {
+    baseDirFollowsSourceDir()
+    sourceDir file('docs')
+    outputDir file('build/docs')
+
+    attributes 'source-highlighter': 'rouge'
+
+    attributes 'revnumber': getVersionName()
 }

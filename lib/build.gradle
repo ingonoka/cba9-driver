@@ -1,7 +1,7 @@
-buildscript {
-    apply from: '../../common-versions/versions/versions_own.gradle'
-    apply from: '../../common-versions/versions/versions_external.gradle'
-}
+//buildscript {
+//    apply from: '../../common-versions/versions/versions_own.gradle'
+//    apply from: '../../common-versions/versions/versions_external.gradle'
+//}
 
 plugins {
     id 'com.android.library'
@@ -10,10 +10,15 @@ plugins {
     id 'maven-publish'
     id 'org.asciidoctor.jvm.convert'
     id 'org.jetbrains.dokka'
-    id 'com.jfrog.artifactory'
 }
 
-apply from: '../../common-versions/versioning.gradle'
+repositories {
+    google()
+    mavenCentral()
+    mavenLocal()
+}
+
+//apply from: '../../common-versions/versioning.gradle'
 
 
 android {
@@ -24,7 +29,7 @@ android {
 
         minSdkVersion android_min_sdk_version
         targetSdkVersion android_target_sdk_version.toInteger()
-        versionCode = project.ext.versionCode
+        versionCode = getVersionCode()
         versionName = version
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
