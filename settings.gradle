@@ -1,3 +1,4 @@
 
 rootProject.name = "cba9-driver"
 include ':lib'
+include ':cba9tester'

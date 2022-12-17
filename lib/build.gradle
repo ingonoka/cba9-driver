@@ -6,6 +6,7 @@ buildscript {
 plugins {
     id 'com.android.library'
     id 'kotlin-android'
+    id 'kotlin-kapt'
     id 'maven-publish'
     id 'org.asciidoctor.jvm.convert'
     id 'org.jetbrains.dokka'
@@ -51,7 +52,12 @@ dependencies {
     implementation "org.slf4j:slf4j-api:$slf4j_version"
     testImplementation 'junit:junit:4.13.2'
 
-    implementation "com.ingonoka:utils-lib:$utils_mp_version"
+    implementation "androidx.room:room-ktx:$room_version"
+    kapt "androidx.room:room-compiler:$room_version"
+
+//    implementation("com.ingonoka:utils-lib:$utils_mp_version")  { transitive = false }
+//    implementation("com.ingonoka:hexutils-lib-android:${hexutils_mp_version}") { transitive = false }
+
 }
 
 task sourceJar(type: Jar) {
@@ -65,12 +71,12 @@ afterEvaluate {
             release(MavenPublication) {
                 from components.release
                 artifact(sourceJar)
-                artifactId = 'nfc-adapter-android-lib'
+                artifactId = 'cba9-driver'
             }
             debug(MavenPublication) {
                 from components.debug
                 artifact(sourceJar)
-                artifactId = 'nfc-adapter-android-lib-debug'
+                artifactId = 'cba9-driver-debug'
 
             }
         }
@@ -89,6 +95,17 @@ publishing {
                 }
             }
             developers { developer { name = pom_developer } }
+        }
+    }
+
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/")
+            credentials {
+                username = System.getenv("USERNAME")
+                password = System.getenv("TOKEN")
+            }
         }
     }
 }
