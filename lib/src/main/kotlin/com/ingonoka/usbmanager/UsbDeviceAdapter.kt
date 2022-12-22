@@ -89,27 +89,6 @@ interface IUsbDeviceAdapter : IUsbTransceiver {
     fun linkAdapterToUsbDevice(context: Context, usbDevice: UsbDevice): Result<Unit>
 
     fun close()
-
-    companion object {
-
-//        val nullAdapter = object : IUsbDeviceAdapter {
-//            override val state: StateFlow<UsbDeviceAdapterLivecycleStates> = MutableStateFlow(NOT_INSTALLED)
-//            override fun compareAndSetState(
-//                oldState: UsbDeviceAdapterLivecycleStates,
-//                newState: UsbDeviceAdapterLivecycleStates
-//            ): Result<Boolean> =
-//                throw IllegalStateException()
-//
-//            override val preferredName: String = "NULL"
-//            override fun hasName(name: String): Boolean = name.equals("NULL", true)
-//            override fun linkAdapterToUsbDevice(context: Context, usbDevice: UsbDevice): Result<Unit> = throw IllegalStateException()
-//
-//            override fun close() = Unit
-//            override fun transceive(data: List<Int>): Result<List<Int>> = throw IllegalStateException()
-//            override fun controlCommand(requestType: Int, request: Int, value: Int, data: ByteArray?): Result<Int> =
-//                throw IllegalStateException()
-//        }
-    }
 }
 
 /**
@@ -304,7 +283,11 @@ class UsbDeviceAdapter(
      * Send data to endpoint using synchronous bulk transfer
      */
     private fun sendWithBulkTransfer(data: List<Int>, usbEndpoint: UsbEndpoint): Result<Int> =
+
         try {
+
+            require(usbEndpoint.direction == UsbConstants.USB_DIR_OUT)
+            { "Attempt tp send data to a USB endpoint that is only receiving from the device" }
 
             logger.trace("Send /w bulk (${props.timeoutSend}): ${data.toHexShortShort()}")
             val sentThisTime = usbConnection?.bulkTransfer(
@@ -333,6 +316,9 @@ class UsbDeviceAdapter(
      * Receive data from endpoint using synchronous bulk transfer
      */
     private fun receiveWithBulkTransfer(usbEndpoint: UsbEndpoint): Result<List<Int>> = try {
+
+        require(usbEndpoint.direction == UsbConstants.USB_DIR_IN)
+        { "Attempt tp receive data from a USB endpoint that is only sending to the device" }
 
         val buf = ByteArray(256)
 
@@ -366,7 +352,7 @@ class UsbDeviceAdapter(
      */
     private fun transceiveWithBulkTransfer(data: List<Int>): Result<List<Int>> = try {
 
-        logger.trace("Transceive with bulk: ${usbDevice?.productName}")
+        logger.trace("Transceive in bulk transfer mode: ${usbDevice?.productName}")
 
         if (data.isNotEmpty()) {
             val numBytesSent = sendingEndpoint?.let { endPoint ->
@@ -378,9 +364,9 @@ class UsbDeviceAdapter(
 
         val buf = receivingEndpoint?.let { endPoint ->
             receiveWithBulkTransfer(endPoint).getOrThrow()
-        } ?: throw Exception("Adapter has no receiving endpoint for device.")
-
-        logger.trace("Bytes received from Usb device ${usbDevice?.productName}: ${buf.size}, ${buf.toHexShortShort()}")
+        }?.apply {
+            logger.trace("Bytes received from Usb device ${usbDevice?.productName}: ${size}, ${toHexShortShort()}")
+        } ?: listOf()
 
         Result.success(buf)
 
