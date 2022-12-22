@@ -91,14 +91,14 @@ sealed class Cba9AttachmentEvent(val time: Instant = Clock.System.now()) {
      * Attachment event of a [ICba9].
      */
     class Attached(val device: ICba9) : Cba9AttachmentEvent() {
-        override fun toString(): String = "${toString(time)}, Cba9 attached: ${device.cba9Validator}"
+        override fun toString(): String = "${toString(time)}, Cba9 attached: ${device.cba9Validator.value}"
     }
 
     /**
      * Detachment event of a [ICba9].
      */
     class Detached(val device: ICba9) : Cba9AttachmentEvent() {
-        override fun toString(): String = "${toString(time)}, Cba9 detached: ${device.cba9Validator}"
+        override fun toString(): String = "${toString(time)}, Cba9 detached: ${device.cba9Validator.value}"
     }
 
     /**
