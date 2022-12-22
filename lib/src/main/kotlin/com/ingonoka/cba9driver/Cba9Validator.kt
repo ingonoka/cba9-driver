@@ -313,18 +313,19 @@ class Cba9Validator(
             event.denomination
         }
 
-        if (currentState.state != newState && currentState.denomination != denomination)
-            logger.trace("CBA9 state transition: ${currentState.state.name} + ${event.sspEventCode.name} = ${newState.name}")
-
         val newStateHolder = Cba9ValidatorStateHolder(Clock.System.now(), newState, denomination)
 
         _stateFlow.emit(newStateHolder)
-        _state.emit(newStateHolder)
+
+        if (currentState.state != newState && currentState.denomination != denomination) {
+            logger.trace("CBA9 state transition: ${currentState.state.name} + ${event.sspEventCode.name} = ${newState.name}")
+        }
 
         if (currentState.state != newState) {
             logger.debug(
                 "BNA State change: ${currentState.stringify(true)} (${event.stringify(true)}) -> ${state.value.stringify(true)}"
             )
+            _state.emit(newStateHolder)
         }
 
         Result.success(newState)
