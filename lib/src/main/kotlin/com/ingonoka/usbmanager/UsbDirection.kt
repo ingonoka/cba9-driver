@@ -14,15 +14,6 @@ import com.ingonoka.cba9driver.util.Stringifiable
 /**
  * Create a printable string describing the USB direction of an endpoint
  */
-//fun Int.usbDirectionStringify(): String {
-//
-//    return when (this) {
-//        128 -> "In"
-//        0 -> "Out"
-//        else -> "Unknown"
-//    }
-//}
-
 @JvmInline
 value class UsbDirection(val value: Int) : Stringifiable {
     override fun stringify(short: Boolean, indent: String): String =

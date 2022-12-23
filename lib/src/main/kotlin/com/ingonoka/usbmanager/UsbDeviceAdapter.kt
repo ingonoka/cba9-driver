@@ -17,12 +17,12 @@ import com.ingonoka.cba9driver.hexutils.toHexShortShort
 import com.ingonoka.cba9driver.util.combineAllMessages
 import com.ingonoka.cba9driver.util.toByteArray
 import com.ingonoka.cba9driver.util.toListOfInt
-import com.ingonoka.usbmanager.UsbDeviceAdapterLivecycleStates.*
+import com.ingonoka.usbmanager.enums.UsbDeviceAdapterLivecycleStates.*
+import com.ingonoka.usbmanager.enums.UsbTransferMode
 import com.ingonoka.usbmanager.utils.getUsbManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import org.slf4j.LoggerFactory
@@ -30,79 +30,22 @@ import java.nio.ByteBuffer
 import kotlin.coroutines.CoroutineContext
 
 /**
- * Indicates method used for transfer data for sending and receiving
- *
- */
-enum class UsbTransferMode {
-    /**
-     * Use [UsbDeviceConnection.bulkTransfer]
-     */
-    BULK,
-
-    /**
-     * Use [UsbDeviceConnection.bulkTransfer] with timeout
-     */
-    BULK_TIMEOUT,
-
-    /**
-     * use [UsbRequest.queue] and [UsbDeviceConnection.requestWait]
-     */
-    REQUEST,
-
-    /**
-     * use [UsbRequest.queue] and [UsbDeviceConnection.requestWait] with timeout
-     */
-    REQUEST_TIMEOUT
-}
-
-interface IUsbTransceiver {
-    /**
-     * Send [data] to a USB device and return a response
-     *
-     * @return [List] of bytes received back
-     */
-    fun transceive(data: List<Int> = emptyList()): Result<List<Int>>
-
-    /**
-     * Send control commands to a USB device
-     */
-    fun controlCommand(requestType: Int, request: Int, value: Int, data: ByteArray? = null): Result<Int>
-
-}
-
-interface IUsbDeviceAdapter : IUsbTransceiver {
-
-    /**
-     * The current state of the adapter e.g. attached, detached etc.
-     */
-    val state: StateFlow<UsbDeviceAdapterLivecycleStates>
-
-    fun compareAndSetState(oldState: UsbDeviceAdapterLivecycleStates, newState: UsbDeviceAdapterLivecycleStates): Result<Boolean>
-
-    /**
-     * String that identifies the adapter generically.
-     */
-    val preferredName: String
-
-    fun hasName(name: String): Boolean
-
-    fun linkAdapterToUsbDevice(context: Context, usbDevice: UsbDevice): Result<Unit>
-
-    fun close()
-}
-
-/**
  * Adapter for USB devices that either receive or send data to and from a USB
- * device. "props" contains properties for the adapter configuration.
+ * device.
+ *
+ * @property  props contains properties for the adapter configuration.
+ * @property usbDevice Device "driven" by this adapter.  The adapter handles one single device
+ * at a time.
  *
  */
 class UsbDeviceAdapter(
     val props: UsbDriverProperties,
-) : IUsbDeviceAdapter, CoroutineScope {
+    private val usbDevice: UsbDevice
+) : IUsbDeviceAdapter, IUsbTransceiver, CoroutineScope {
 
     private val logger = LoggerFactory.getLogger(UsbDeviceAdapter::class.java.name)
 
-    private val _state = MutableStateFlow(NOT_INSTALLED)
+    private val _state = MutableStateFlow(NOT_STARTED)
 
     /**
      * The current state of the adapter e.g. attached, detached etc.
@@ -110,29 +53,9 @@ class UsbDeviceAdapter(
     override val state = _state.asStateFlow()
 
     /**
-     * Set [state] to [newState]. return a failure if the current [state] is not [oldState]
-     */
-    override fun compareAndSetState(
-        oldState: UsbDeviceAdapterLivecycleStates, newState: UsbDeviceAdapterLivecycleStates
-    ): Result<Boolean> = Result.success(_state.compareAndSet(oldState, newState))
-
-    /**
-     * @property [usbDevice] ]Device "driven" by this adapter.  The adapter handles one single device
-     * at a time.
-     */
-    private var usbDevice: UsbDevice? = null
-
-    /**
      * @property [usbConnection] Connection to the USB device
      */
     private var usbConnection: UsbDeviceConnection? = null
-
-    /**
-     * String that identifies the adapter generically. (If more than one adapter has been instantiated, all of them
-     * will have the same adapter name.)
-     */
-    override val preferredName: String
-        get() = "${props.names[0]}(SN:${usbDevice?.serialNumber ?: "N/A"})"
 
     /**
      * The list of claimed interfaces
@@ -159,11 +82,9 @@ class UsbDeviceAdapter(
      * this function will have no effect.
      *
      */
-    override fun linkAdapterToUsbDevice(context: Context, usbDevice: UsbDevice): Result<Unit> = try {
+    override fun start(context: Context): Result<UsbDeviceAdapter> = try {
 
         _state.update { INSTALLING }
-
-        logger.debug("Attaching ${usbDevice.productName} to adapter")
 
         val usbManager = context.getUsbManager()
             ?: throw Exception("Could not retrieve Android USB Manager from context.")
@@ -180,7 +101,7 @@ class UsbDeviceAdapter(
 
         if (listOfClaimedInterfaces.isEmpty()) {
             throw Exception(
-                "$preferredName: No interfaces on device to listen on ${usbDevice.stringify(oneLine = true)}"
+                "${usbDevice.productName}: No interfaces on device to listen on ${usbDevice.stringify(oneLine = true)}"
             )
         }
 
@@ -188,16 +109,13 @@ class UsbDeviceAdapter(
 
         receivingEndpoint = getReceivingEndpoint(props.interfaceIndex, props.receivingEndpointIndex)
 
-        this@UsbDeviceAdapter.usbDevice = usbDevice
-
         _state.update { INSTALLED }
 
-        Result.success(Unit)
+        Result.success(this)
 
     } catch (e: Exception) {
 
         _state.update { FAILED }
-//        close()
         Result.failure(Exception("Failed to attach adapter to device: ${usbDevice.stringify(oneLine = true)}", e))
     }
 
@@ -210,40 +128,27 @@ class UsbDeviceAdapter(
      */
     override fun close() {
 
-        logger.info("Adapter $preferredName: Detaching device from adapter")
+        logger.info("Adapter ${usbDevice.productName}: Detaching device from adapter")
 
-        usbDevice?.listOfAllInterfaces()?.forEach { usbConnection?.releaseInterface(it) }
+        usbDevice.listOfAllInterfaces().forEach { usbConnection?.releaseInterface(it) }
 
         usbConnection?.close()
 
         usbConnection = null
 
-        usbDevice = null
-
-        _state.update { NOT_INSTALLED }
-    }
-
-    /**
-     * Return true when this adapter supports a device with vendorId and productId defined in [UsbDriverProperties]
-     */
-    fun supports(usbDevice: UsbDevice): Boolean {
-
-        if (props.vendorId != usbDevice.vendorId || props.productId != usbDevice.productId) return false
-
-        return true
-
+        _state.update { NOT_STARTED }
     }
 
     private fun getSendingEndpoint(interfaceIndex: Int, endpointIndex: Int): UsbEndpoint {
         return listOfClaimedInterfaces.find { usbInterface -> usbInterface.id == interfaceIndex }
             ?.sendingEndpointOrNull(endpointIndex)
-            ?: throw IllegalStateException("Adapter $preferredName:  There is no sending Interface with index \"$interfaceIndex\" and endpoint \"$endpointIndex\"")
+            ?: throw IllegalStateException("Adapter ${usbDevice.productName}:  There is no sending Interface with index \"$interfaceIndex\" and endpoint \"$endpointIndex\"")
     }
 
     private fun getReceivingEndpoint(interfaceIndex: Int, endpointIndex: Int): UsbEndpoint {
         return listOfClaimedInterfaces.find { usbInterface -> usbInterface.id == interfaceIndex }
             ?.receivingEndpointOrNull(endpointIndex)
-            ?: throw IllegalStateException("Adapter $preferredName:  There is no receiving Interface with index \"$interfaceIndex\" and endpoint \"$endpointIndex\"")
+            ?: throw IllegalStateException("Adapter ${usbDevice.productName}:  There is no receiving Interface with index \"$interfaceIndex\" and endpoint \"$endpointIndex\"")
     }
 
     /**
@@ -256,7 +161,7 @@ class UsbDeviceAdapter(
             for (usbInterface in usbDevice.listOfAllInterfaces()) {
                 if (usbDeviceConnection.claimInterface(usbInterface, true)) {
                     logger.debug(
-                        "$preferredName: Claimed interface: ${
+                        "${usbDevice.productName}: Claimed interface: ${
                             usbInterface.stringify(oneLine = true)
                         }    on device ${
                             usbDevice.stringify(oneLine = true)
@@ -264,7 +169,7 @@ class UsbDeviceAdapter(
                     )
                     add(usbInterface)
                 } else {
-                    logger.error("$preferredName: Could not claim interface ${usbInterface.stringify()} on device ${usbDevice.stringify()}")
+                    logger.error("${usbDevice.productName}: Could not claim interface ${usbInterface.stringify()} on device ${usbDevice.stringify()}")
                 }
             }
         }.toList()
@@ -299,10 +204,10 @@ class UsbDeviceAdapter(
             ) ?: throw Exception("Usb Connection not available.")
 
             if (sentThisTime < 0) {
-                throw Exception("$preferredName: Bulk transfer has failed.")
+                throw Exception("${usbDevice.productName}: Bulk transfer has failed.")
             }
 
-            logger.trace("Adapter $preferredName: Successfully sent $sentThisTime bytes to device: ${data.toHexShortShort()}")
+            logger.trace("Adapter ${usbDevice.productName}: Successfully sent $sentThisTime bytes to device: ${data.toHexShortShort()}")
 
             Result.success(sentThisTime)
 
@@ -333,7 +238,7 @@ class UsbDeviceAdapter(
             )
 
             if (numReceived < 0) {
-                throw Exception("$preferredName: Bulk receive has failed.")
+                throw Exception("${usbDevice.productName}: Bulk receive has failed.")
             }
 
             buf.take(numReceived).map { it.toInt() }
@@ -352,27 +257,27 @@ class UsbDeviceAdapter(
      */
     private fun transceiveWithBulkTransfer(data: List<Int>): Result<List<Int>> = try {
 
-        logger.trace("Transceive in bulk transfer mode: ${usbDevice?.productName}")
+        logger.trace("Transceive in bulk transfer mode: ${usbDevice.productName}")
 
         if (data.isNotEmpty()) {
             val numBytesSent = sendingEndpoint?.let { endPoint ->
                 sendWithBulkTransfer(data, endPoint).getOrThrow()
             } ?: throw Exception("Adapter has no sending endpoint for device.")
 
-            logger.trace("Bytes sent to Usb device ${usbDevice?.productName}: $numBytesSent")
+            logger.trace("Bytes sent to Usb device ${usbDevice.productName}: $numBytesSent")
         }
 
         val buf = receivingEndpoint?.let { endPoint ->
             receiveWithBulkTransfer(endPoint).getOrThrow()
         }?.apply {
-            logger.trace("Bytes received from Usb device ${usbDevice?.productName}: ${size}, ${toHexShortShort()}")
+            logger.trace("Bytes received from Usb device ${usbDevice.productName}: ${size}, ${toHexShortShort()}")
         } ?: listOf()
 
         Result.success(buf)
 
     } catch (e: Exception) {
 
-        Result.failure(Exception("Failed transceive of data via sync bulk transfer, ${usbDevice?.productName}", e))
+        Result.failure(Exception("Failed transceive of data via sync bulk transfer, ${usbDevice.productName}", e))
     }
 
     /**
@@ -442,8 +347,6 @@ class UsbDeviceAdapter(
 
         Result.failure(e)
     }
-
-    override fun hasName(name: String): Boolean = props.names.contains(name)
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

@@ -10,17 +10,21 @@
 package com.ingonoka.cba9driver
 
 import com.ingonoka.cba9driver.statelog.ICba9StateLog
+import com.ingonoka.cba9driver.statelog.inMemoryCba9StateLog
 import com.ingonoka.cba9driver.util.Stringifiable
-import com.ingonoka.usbmanager.UsbDeviceAdapter
+import com.ingonoka.usbmanager.IUsbTransceiver
+import com.ingonoka.usbmanager.UsbDriver
+import com.ingonoka.usbmanager.UsbDriverFactory
+import com.ingonoka.usbmanager.UsbDriverProperties
 
 /**
  * Factory creates new driver instances for CBA9 devices
  */
-class Cba9Factory(private val stateLog: ICba9StateLog, private var cba9Props: Cba9Properties) : Stringifiable {
+class Cba9Factory() : UsbDriverFactory, Stringifiable {
 
-    fun createCba9(usbDeviceAdapter: UsbDeviceAdapter): Result<Cba9> = try {
+    override fun create(adapter: IUsbTransceiver): Result<UsbDriver> = try {
 
-        Result.success(Cba9(cba9Props, stateLog, usbDeviceAdapter))
+        Result.success(Cba9(cba9Props, stateLog, adapter))
 
     } catch (e: Exception) {
 
@@ -33,4 +37,16 @@ class Cba9Factory(private val stateLog: ICba9StateLog, private var cba9Props: Cb
         } else {
             "USB Adapter for CBA9/Banknote Acceptor/Innovative Technology Ltd/Vendor ID 6428/Product ID 16644"
         }
+
+    override fun supports(vendorId: Int, productId: Int): Boolean =
+        cba9Props.usbProps.vendorId == vendorId && cba9Props.usbProps.productId == productId
+
+
+    override fun usbProperties(): UsbDriverProperties = cba9Props.usbProps
+
+    companion object {
+
+        var stateLog: ICba9StateLog = inMemoryCba9StateLog()
+        var cba9Props: Cba9Properties = Cba9Properties()
+    }
 }

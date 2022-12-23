@@ -15,10 +15,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
-import com.ingonoka.cba9driver.Cba9AdapterFactory
-import com.ingonoka.cba9driver.Cba9Properties
-import com.ingonoka.cba9driver.ICba9
-import com.ingonoka.cba9driver.isCba9
 import com.ingonoka.cba9driver.util.Stringifiable
 import com.ingonoka.cba9driver.util.combineAllMessages
 import com.ingonoka.cba9driver.util.safeLet
@@ -32,32 +28,36 @@ import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.*
 import org.slf4j.LoggerFactory
 import kotlin.coroutines.CoroutineContext
+import kotlin.reflect.KClass
+import kotlin.reflect.cast
 
 /**
- * Enumeration of lifecycle states for a USB adapter.
- */
-enum class UsbDeviceAdapterLivecycleStates {
-    NOT_INSTALLED, INSTALLING, INSTALLED, FAILED
-}
-
-/**
- * Manager of CBA9 and CP210x devices.
+ * Manager of Usb devices.
  */
 //@Suppress("unused")
 class UsbDeviceManager : Stringifiable, CoroutineScope {
 
     private val logger = LoggerFactory.getLogger(this::class.java.canonicalName!!)
 
-    private val _connectedCba9 = MutableStateFlow<ICba9?>(null)
-    val connectedCba9 = _connectedCba9.asStateFlow()
+    private val _connectedDrivers = MutableStateFlow<List<UsbDriver>>(listOf())
+    val connectedDrivers: StateFlow<List<UsbDriver>> = _connectedDrivers.asStateFlow()
 
-    private val _cba9AttachmentEvents = MutableSharedFlow<Cba9AttachmentEvent>(128)
-    private val cba9AttachmentEvents = _cba9AttachmentEvents.asSharedFlow()
+    private val _driverAttachmentEvents = MutableSharedFlow<DriverAttachmentEvent>(128)
+    val driverAttachmentEvents: SharedFlow<DriverAttachmentEvent> = _driverAttachmentEvents.asSharedFlow()
 
     /**
      * Job that processes USB device attachment/detachment events received from the Android system
      */
     private var androidUsbEventsProcessor: Job? = null
+
+    fun <T : UsbDriver> getDriver(klass: KClass<T>): Result<T> =
+        connectedDrivers.value.firstOrNull { klass.isInstance(it) }
+            ?.let { Result.success(klass.cast(it)) }
+            ?: Result.failure(Exception())
+
+    inline fun <reified T : UsbDriver> getAttachmentEvents(): Flow<DriverAttachmentEvent> = driverAttachmentEvents.filter {
+        it.driver is T
+    }
 
     /**
      * Start the android USB events processor.
@@ -70,15 +70,14 @@ class UsbDeviceManager : Stringifiable, CoroutineScope {
     }
 
     /**
-     * Call [detachDevice] for all devices that are connected.
+     * Call [detachDevice] for all devices that are managed by this UsbDeviceManager.
      */
-    suspend fun stop(context: Context) {
+    suspend fun stop() {
 
         androidUsbEventsProcessor?.cancelAndJoin()
 
-        context.getUsbManager()?.deviceList?.values?.forEach { androidUsbDevice ->
-            detachDevice(androidUsbDevice)
-        }
+        connectedDrivers.value.forEach { it.close() }
+
     }
 
     /**
@@ -95,26 +94,33 @@ class UsbDeviceManager : Stringifiable, CoroutineScope {
         val callback = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent?) {
 
-                safeLet(intent?.action, intent?.getUsbDevice()) { s: String, u: UsbDevice ->
-                    channel.trySendBlocking(AndroidUsbDeviceEvent(s, u))
-                        .onSuccess { logger.debug("Submitted new Android Usb event for processing:  ${u.productName} / $s") }
-                        .onFailure { logger.debug("Failed to submit new Android USB event for processing: ${u.productName} / $s") }
+                val action = intent?.action
+                val actionStr = action?.takeLastWhile { it != '.' }
+                val device = intent?.getUsbDevice()
+
+                safeLet(action, device) { a: String, d: UsbDevice ->
+
+                    logger.info("New USB device detected: ${d.productName}")
+
+                    channel.trySendBlocking(AndroidUsbDeviceEvent(a, d))
+                        .onSuccess { logger.trace("Submitted new Android Usb event for processing:  ${d.productName} / $actionStr") }
+                        .onFailure { logger.error("Failed to submit new Android USB event for processing: ${d.productName} / $actionStr") }
+
+
                 } ?: throw IllegalStateException()
 
             }
         }
 
         /**
-         * attach devices that are already connected
+         * Attach devices that are already connected
          */
         context.getUsbManager()?.let { manager ->
-            manager.deviceList?.filter {
+            manager.deviceList?.forEach {
                 val (_, device) = it
-                logger.info("Device discovered on startup: ${device.stringify("", true)} ")
-                device.isCba9()
-            }?.forEach {
-                val (_, device) = it
-                channel.trySendBlocking(AndroidUsbDeviceEvent(UsbManager.ACTION_USB_DEVICE_ATTACHED, device))
+                logger.info("Device discovered on startup: ${device.productName} ")
+
+                channel.trySend(AndroidUsbDeviceEvent(UsbManager.ACTION_USB_DEVICE_ATTACHED, device))
             }
         }
 
@@ -154,26 +160,29 @@ class UsbDeviceManager : Stringifiable, CoroutineScope {
             val actionStr = action.takeLastWhile { it != '.' }
             logger.info("Received $actionStr for ${device.productName}")
 
-            try {
-                when (action) {
+            if (UsbDriverFactory.supports(device.vendorId, device.productId)) {
+                try {
+                    when (action) {
 
-                    UsbManager.ACTION_USB_DEVICE_ATTACHED -> attachDevice(context, device)
-                        .onSuccess { logger.info("Successfully attached ${device.productName}") }
-                        .onFailure { logger.error("Failed attachment of ${device.productName}") }
-                        .getOrThrow()
+                        UsbManager.ACTION_USB_DEVICE_ATTACHED -> attachDevice(context, device)
+                            .onSuccess { logger.info("Successfully attached ${device.productName}") }
+                            .getOrThrow()
 
-                    UsbManager.ACTION_USB_DEVICE_DETACHED -> detachDevice(androidUsbDeviceEvent.device)
-                        .onSuccess { logger.info("Successfully detached ${device.productName}") }
-                        .onFailure { logger.error("Failed detachment of ${device.productName}") }
-                        .getOrThrow()
+                        UsbManager.ACTION_USB_DEVICE_DETACHED -> detachDevice(androidUsbDeviceEvent.device)
+                            .onSuccess { logger.info("Successfully detached ${device.productName}") }
+                            .getOrThrow()
 
-                    else -> throw IllegalStateException("Unexpected action: $androidUsbDeviceEvent.action")
+                        else -> throw IllegalStateException("Unexpected action: $androidUsbDeviceEvent.action")
+                    }
+                } catch (e: Exception) {
+                    logger.warn("Failed $actionStr for ${androidUsbDeviceEvent.device.productName}: ${e.combineAllMessages(", ")}")
                 }
-            } catch (e: Exception) {
-                logger.warn("Failed $actionStr for ${androidUsbDeviceEvent.device.productName}: ${e.combineAllMessages(", ")}")
+
+            } else {
+
+                logger.warn("Usb device not supported:${device.productName}")
             }
 
-            logger.info("Finished processing $actionStr for ${androidUsbDeviceEvent.device.productName}")
         }.collect()
 
     } catch (e: CancellationException) {
@@ -192,18 +201,12 @@ class UsbDeviceManager : Stringifiable, CoroutineScope {
 
         logger.debug("Detaching driver for ${usbDevice.productName}")
 
-        when {
-            usbDevice.isCba9() -> {
-                connectedCba9.value?.apply {
-                    _cba9AttachmentEvents.emit(Cba9AttachmentEvent.Detached(this))
-                    _connectedCba9.update { null }
-                    close()
-                } ?: logger.warn("Received CBA9 detachment event, but no CB9 attached.")
-            }
-
-            else -> logger.warn("Detachment event for unsupported device: $usbDevice")
-
+        connectedDrivers.value.filter { it.supports(usbDevice) }.forEach { driver ->
+            _driverAttachmentEvents.emit(DriverAttachmentEvent.Detached(driver))
+            _connectedDrivers.update { listOf() }
+            driver.close()
         }
+
 
         logger.debug("Finished detaching driver for ${usbDevice.productName}")
 
@@ -220,12 +223,16 @@ class UsbDeviceManager : Stringifiable, CoroutineScope {
      */
     private suspend fun attachDevice(context: Context, usbDevice: UsbDevice): Result<Unit> = try {
 
-        logger.trace("Attaching driver for ${usbDevice.productName}")
-
-        if (usbDevice.isCba9() && connectedCba9.value != null) {
-            logger.warn("New Cba9 connection event when a CBA9 is still connected.")
-            connectedCba9.value?.close()
-            _connectedCba9.update { null }
+        _connectedDrivers.update { listOfDrivers ->
+            listOfDrivers.filter { driver ->
+                if (driver.supports(usbDevice)) {
+                    logger.warn("New USB device connection event when a driver is already installed.")
+                    driver.close()
+                    false
+                } else {
+                    true
+                }
+            }
         }
 
         createDriverForDevice(context, usbDevice).getOrThrow()
@@ -240,33 +247,32 @@ class UsbDeviceManager : Stringifiable, CoroutineScope {
     /**
      * Use factory to create the respective device driver.
      *
-     * Publish the attachment event (or a failure) via [cba9AttachmentEvents]
+     * Publish the attachment event (or a failure) via [driverAttachmentEvents]
      *
      */
-    private suspend fun createDriverForDevice(context: Context, usbDevice: UsbDevice): Result<Unit> = try {
+    private suspend fun createDriverForDevice(context: Context, usbDevice: UsbDevice): Result<Any> = try {
 
         logger.trace("Creating driver for ${usbDevice.productName}")
 
-        when {
-            usbDevice.isCba9() -> {
-                _cba9AttachmentEvents.emit(Cba9AttachmentEvent.Attaching())
+        val driver = UsbDriverFactory.get(usbDevice.vendorId, usbDevice.productId)
+            .mapCatching { factory ->
+                UsbDeviceAdapter(factory.usbProperties(), usbDevice)
+                    .start(context)
+                    .mapCatching { adapter -> factory.create(adapter).getOrThrow() }
+                    .onSuccess { driver ->
+                        _driverAttachmentEvents.emit(DriverAttachmentEvent.Attaching(driver))
+                        driver.start()
+                    }
+                    .onSuccess { driver -> _driverAttachmentEvents.emit(DriverAttachmentEvent.Attached(driver)) }
+                    .onSuccess { driver -> _connectedDrivers.update { drivers -> drivers + driver } }
+                    .onFailure { cause -> _driverAttachmentEvents.emit(DriverAttachmentEvent.Failed(cause)) }
+                    .getOrElse { cause -> throw Exception("Usb Driver creation failed", cause) }
 
-                val usbDeviceAdapter = UsbDeviceAdapter(Cba9Properties.usbProps)
-                usbDeviceAdapter.linkAdapterToUsbDevice(context, usbDevice)
-                    .mapCatching { Cba9AdapterFactory().createCba9(usbDeviceAdapter).getOrThrow() }
-                    .mapCatching { cba9 -> cba9.start().getOrThrow() }
-                    .onSuccess { cba9 -> _cba9AttachmentEvents.emit(Cba9AttachmentEvent.Attached(cba9)) }
-                    .onSuccess { cba9 -> _connectedCba9.update { cba9 } }
-                    .onFailure { cause -> _cba9AttachmentEvents.emit(Cba9AttachmentEvent.Failed(cause)) }
-                    .getOrElse { cause -> throw Exception("CBA9 creation failed", cause) }
             }
+            .onFailure { _driverAttachmentEvents.emit(DriverAttachmentEvent.Failed(Exception("Device not supported: $usbDevice"))) }
+            .getOrThrow()
 
-            else -> throw NotImplementedError("Usb device not supported: ${usbDevice.stringify()}")
-        }
-
-        logger.trace("Finished creating driver for ${usbDevice.productName}")
-
-        Result.success(Unit)
+        Result.success(driver)
 
     } catch (e: Exception) {
 
@@ -277,9 +283,9 @@ class UsbDeviceManager : Stringifiable, CoroutineScope {
      * Text representation of the USB Device manager's stage
      */
     override fun stringify(short: Boolean, indent: String) = if (short) {
-        "${indent}Cba9:${connectedCba9.value}"
+        "${indent}${connectedDrivers.value.joinToString { it.preferredName }}"
     } else {
-        "${indent}Attached devices: Cba9:${connectedCba9.value}"
+        "${indent}Attached drivers: ${connectedDrivers.value.joinToString { it.preferredName }}"
     }
 
     override val coroutineContext: CoroutineContext

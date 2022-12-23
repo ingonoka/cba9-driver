@@ -9,6 +9,7 @@
 
 package com.ingonoka.cba9driver
 
+import android.hardware.usb.UsbDevice
 import com.ingonoka.cba9driver.command.*
 import com.ingonoka.cba9driver.data.CountryCode.*
 import com.ingonoka.cba9driver.event.*
@@ -20,8 +21,11 @@ import com.ingonoka.cba9driver.response.SspResponse
 import com.ingonoka.cba9driver.statelog.ICba9StateLog
 import com.ingonoka.cba9driver.util.Stringifiable
 import com.ingonoka.cba9driver.util.combineAllMessages
-import com.ingonoka.usbmanager.UsbDeviceAdapter
-import com.ingonoka.usbmanager.UsbDeviceAdapterLivecycleStates.*
+import com.ingonoka.cba9driver.util.takeIfIsInstance
+import com.ingonoka.usbmanager.IUsbDeviceAdapter
+import com.ingonoka.usbmanager.IUsbTransceiver
+import com.ingonoka.usbmanager.UsbDriver
+import com.ingonoka.usbmanager.enums.UsbDeviceAdapterLivecycleStates.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.datetime.Clock
@@ -73,26 +77,20 @@ interface ICba9 : Stringifiable {
      * Send disable command to validator and set validator status to inactive
      */
     suspend fun disableValidator(): Result<SspResponse>
-
-    suspend fun start(): Result<ICba9>
-    suspend fun close()
 }
 
 /**
- * Provides access to a CBA9 BNA, using [usbAdapter] to send commands and receive data via USB. The [stateLog] is used
+ * Provides access to a CBA9 BNA, using [adapter] to send commands and receive data via USB. The [stateLog] is used
  * to keep track of accepted banknotes, cash collection events, and to store audit counters received from the BNA.
  *
  * Configuration parameters are provided in [props].
  */
 class Cba9(
     private val props: Cba9Properties = Cba9Properties(),
-    val stateLog: ICba9StateLog,
-    private val usbAdapter: UsbDeviceAdapter
-) : ICba9, CoroutineScope {
+    private val stateLog: ICba9StateLog,
+    override val adapter: IUsbTransceiver
+) : ICba9, UsbDriver, CoroutineScope {
 
-    init {
-        require(usbAdapter.hasName("CBA9"))
-    }
 
     private val logger = LoggerFactory.getLogger(this::class.java.name)
 
@@ -142,12 +140,21 @@ class Cba9(
      */
     private var tickerIsActive = true
 
+    override val preferredName: String
+        get() = "${props.usbProps.names[0]}(SN:${cba9Validator.value?.serialNumber ?: "N/A"})"
+
+
+    override fun hasName(name: String): Boolean = name in props.usbProps.names
+
+    override fun supports(usbDevice: UsbDevice): Boolean = usbDevice.vendorId == props.usbProps.vendorId &&
+            usbDevice.productId == props.usbProps.productId
+
     /**
      * The USB driver will call this function after a USB connection has been established. For the CBA9 driver
      * this function will go through the sequence of setting up the BNA and enabling it.  If successful, the
      * device will be in READY state and start accepting banknotes via the front bezel
      */
-    override suspend fun start(): Result<ICba9> = try {
+    override suspend fun start() {
 
         logger.debug("Initialize CBA9")
 
@@ -155,17 +162,17 @@ class Cba9(
 
         syncAndWait(10, 5.seconds.inWholeMilliseconds)
 
-        usbAdapter.setHostProtocolVersion(props.protocolVersion).getOrThrow()
+        adapter.setHostProtocolVersion(props.protocolVersion).getOrThrow()
 
-        val configData = usbAdapter.getConfig().getOrThrow()
+        val configData = adapter.getConfig().getOrThrow()
 
         logger.info(configData.stringify(true))
 
-        val serialNumberResponseData = usbAdapter.getSerialNumber().getOrThrow()
+        val serialNumberResponseData = adapter.getSerialNumber().getOrThrow()
 
         logger.info(serialNumberResponseData.stringify(false, ""))
 
-        val datasetVersion = usbAdapter.getDatasetVersion().getOrThrow()
+        val datasetVersion = adapter.getDatasetVersion().getOrThrow()
 
         logger.info(datasetVersion.stringify(false))
 
@@ -189,7 +196,7 @@ class Cba9(
 
         pollAndPublish(newCba9Validator)
 
-        usbAdapter.setInhibits(configData.bankNoteDenominations, props.acceptedDenominations).getOrThrow()
+        adapter.setInhibits(configData.bankNoteDenominations, props.acceptedDenominations).getOrThrow()
 
         val enabledDenominations = configData.bankNoteDenominations.getSubset(props.acceptedDenominations)
 
@@ -203,7 +210,7 @@ class Cba9(
             )
         }
 
-        usbAdapter.enable()
+        adapter.enable()
             .onSuccess { newCba9Validator.publishEvent(Enabled()) }
             .getOrThrow()
 
@@ -211,11 +218,6 @@ class Cba9(
 
         pollingJob = startPolling(newCba9Validator)
 
-        Result.success(this)
-
-    } catch (e: Exception) {
-
-        Result.failure(Exception("Failed setup for CBA9 device", e))
     }
 
     override suspend fun close() {
@@ -229,7 +231,7 @@ class Cba9(
             logger.warn("Cancellation of \"tickerJob\" or \"pollingJob\" was interrupted")
         }
 
-        usbAdapter.close()
+        adapter.takeIfIsInstance<IUsbDeviceAdapter>()?.close()
 
         logger.debug("Deactivating validator")
         cba9Validator.value?.stop() ?: logger.warn("No validator to deactivate")
@@ -249,7 +251,7 @@ class Cba9(
      */
     override suspend fun enableValidator(): Result<SspResponse> = cba9Validator.value?.let {
         if (!it.isEnabled()) {
-            usbAdapter.enable()
+            adapter.enable()
         } else {
             Result.failure(Exception("BNA already in enabled state"))
         }
@@ -260,7 +262,7 @@ class Cba9(
      */
     override suspend fun disableValidator(): Result<SspResponse> = cba9Validator.value?.let {
         if (it.isEnabled()) {
-            usbAdapter.disable()
+            adapter.disable()
         } else {
             Result.failure(Exception("BNA already in disabled state"))
         }
@@ -271,7 +273,7 @@ class Cba9(
      */
     override suspend fun getAuditCounters(): Result<GetCountersResponseData> = try {
 
-        val result = usbAdapter.getCounters().getOrThrow()
+        val result = adapter.getCounters().getOrThrow()
 
         Result.success(result)
 
@@ -297,7 +299,7 @@ class Cba9(
         while (sspResponseForSync != OK) {
             if (tries-- > 0) {
                 SspCommand.sequence = 1
-                sspResponseForSync = usbAdapter.sync()
+                sspResponseForSync = adapter.sync()
                     .map { it.genericResponseCode }
                     .getOrDefault(FAIL)
                 if (sspResponseForSync != OK) delay(interval)
@@ -357,7 +359,7 @@ class Cba9(
     }
 
     private suspend fun pollAndPublish(validator: Cba9Validator): PollResponseData =
-        usbAdapter.poll(validator)
+        adapter.poll(validator)
             .onSuccess {
 //                if (it.eventList.intersect(listOf(Cba9ValidatorState.SCANNING, Cba9ValidatorState.NOTE_IN_ESCROW)).isNotEmpty()) {
 //                    validator.banknoteInstruction.compareAndSet(BanknoteInstruction.NONE, BanknoteInstruction.HOLD)
@@ -375,12 +377,12 @@ class Cba9(
 
         when (instruction) {
             BanknoteInstruction.HOLD -> {
-                usbAdapter.holdBanknote().onFailure { logger.warn("Failed HOLD execution", it) }
+                adapter.holdBanknote().onFailure { logger.warn("Failed HOLD execution", it) }
                 tickerInterval = props.holdInterval
             }
 
             BanknoteInstruction.REJECT -> {
-                usbAdapter.ejectBanknote().onFailure { logger.warn("Failed REJECT execution", it) }
+                adapter.ejectBanknote().onFailure { logger.warn("Failed REJECT execution", it) }
                 pollAndPublish(validator)
             }
 

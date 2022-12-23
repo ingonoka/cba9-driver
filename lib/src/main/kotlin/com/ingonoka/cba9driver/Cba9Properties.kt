@@ -9,11 +9,10 @@
 
 package com.ingonoka.cba9driver
 
-import android.hardware.usb.UsbDevice
 import com.ingonoka.cba9driver.data.CountryCode
 import com.ingonoka.cba9driver.data.Denomination
 import com.ingonoka.usbmanager.UsbDriverProperties
-import com.ingonoka.usbmanager.UsbTransferMode
+import com.ingonoka.usbmanager.enums.UsbTransferMode
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -64,28 +63,22 @@ data class Cba9Properties(
      * Format: "true"/"false"
      * Default: "false"
      */
-    val resetOnAttachment: Boolean = false
-) {
+    val resetOnAttachment: Boolean = false,
 
-    companion object {
-
-        /**
-         * USB configs for CBA9
-         */
-        var usbProps: UsbDriverProperties = UsbDriverProperties (
-            names = listOf("Cba9","cba9","CBA9","CBA9SP"),
-            vendorId = 6428,
-            productId = 16_644,
-            sendingEndpointIndex = 1,
-            receivingEndpointIndex = 2,
-            interfaceIndex = 1,
-            controlInterfaceIndex = 0,
-            timeoutSend = 2.seconds,
-            timeoutReceive = 2.seconds,
-            timeoutControlTransfer = Duration.ZERO,
-            transferMode = UsbTransferMode.BULK_TIMEOUT
-        )
-    }
-}
-
-fun UsbDevice.isCba9(): Boolean = Cba9Properties.usbProps.productId == productId && Cba9Properties.usbProps.vendorId == vendorId
+    /**
+     * USB configs for CBA9
+     */
+    val usbProps: UsbDriverProperties = UsbDriverProperties(
+        names = listOf("Cba9", "cba9", "CBA9", "CBA9SP"),
+        vendorId = 6428,
+        productId = 16_644,
+        sendingEndpointIndex = 1,
+        receivingEndpointIndex = 2,
+        interfaceIndex = 1,
+        controlInterfaceIndex = 0,
+        timeoutSend = 2.seconds,
+        timeoutReceive = 2.seconds,
+        timeoutControlTransfer = Duration.ZERO,
+        transferMode = UsbTransferMode.BULK_TIMEOUT
+    )
+)

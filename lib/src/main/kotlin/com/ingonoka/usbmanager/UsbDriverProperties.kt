@@ -9,6 +9,7 @@
 
 package com.ingonoka.usbmanager
 
+import com.ingonoka.usbmanager.enums.UsbTransferMode
 import kotlin.time.Duration
 
 data class UsbDriverProperties(
