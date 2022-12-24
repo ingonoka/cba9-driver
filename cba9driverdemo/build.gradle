@@ -9,8 +9,8 @@ repositories {
 }
 
 android {
-    compileSdkVersion android_compile_sdk_version.toInteger()
-    buildToolsVersion android_build_tools_version
+    compileSdk android_compile_sdk_version.toInteger()
+//    buildToolsVersion android_build_tools_version
 
     defaultConfig {
 

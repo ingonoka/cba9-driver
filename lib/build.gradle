@@ -22,8 +22,8 @@ repositories {
 
 
 android {
-    compileSdkVersion android_compile_sdk_version.toInteger()
-    buildToolsVersion android_build_tools_version
+    compileSdk android_compile_sdk_version.toInteger()
+//    buildToolsVersion android_build_tools_version
 
     defaultConfig {
 
@@ -36,15 +36,18 @@ android {
     }
 
     buildTypes {
-        release {
+        release  {
+            debuggable = false
         }
-        debug{
+        debug {
+            debuggable = true
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
+
     kotlinOptions {
         jvmTarget = '1.8'
     }
@@ -62,7 +65,7 @@ dependencies {
 
 }
 
-task sourceJar(type: Jar) {
+tasks.register("sourceJar", Jar) {
     from android.sourceSets.main.kotlin.srcDirs
     classifier 'sources'
 }
@@ -86,7 +89,7 @@ afterEvaluate {
 }
 
 publishing {
-    publications.all {
+    publications.configureEach {
         pom {
             name = 'CBA9 Banknote Acceptor Driver Library'
             description = 'A library implementing the SSP protocol for CBA9 Banknopte Acceptors'
