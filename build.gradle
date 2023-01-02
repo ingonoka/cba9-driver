@@ -46,7 +46,7 @@ ext {
         try {
             def stdout = new ByteArrayOutputStream()
             exec {
-                commandLine 'git', 'describe', '--tags', '--long'
+                commandLine 'git', 'describe', '--tags' //, '--long'
                 standardOutput = stdout
             }
             return stdout.toString().trim()
