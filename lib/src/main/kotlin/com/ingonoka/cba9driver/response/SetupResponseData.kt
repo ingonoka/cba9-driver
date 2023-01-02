@@ -140,9 +140,9 @@ class SetupResponseData(
                     "${countryCode}," +
                     "$valueMultiplier," +
                     "MAX_CHANNEL:$maxChannelNumber," +
-                    bankNoteDenominations.denominations.toList().zip(channelSecurities).map {
+                    bankNoteDenominations.denominations.toList().zip(channelSecurities).joinToString(",") {
                         "${it.first.first.channelNumber}=${it.first.second}/${it.second.name}"
-                    }.joinToString(",") +
+                    } +
                     ",REAL_VALUE_MULTIPLIER:$realValueMultiplier," +
                     "PROTOCOL:$protocolVersion"
         } else {
