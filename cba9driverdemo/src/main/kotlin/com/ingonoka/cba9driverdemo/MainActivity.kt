@@ -9,6 +9,7 @@
 
 package com.ingonoka.cba9driverdemo
 
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
@@ -21,6 +22,9 @@ import com.ingonoka.cba9driver.statelog.roomCba9StateLog
 import com.ingonoka.cba9driverdemo.databinding.ActivityMainBinding
 import com.ingonoka.usbmanager.DriverAttachmentEvent
 import com.ingonoka.usbmanager.UsbDeviceManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import kotlin.time.Duration.Companion.seconds
@@ -39,46 +43,145 @@ class MainActivity : AppCompatActivity() {
         setContentView(view)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 
+        // tag::cba9factory-config[]
         /**
-         * Example for changing state log for newly created driver to a Room based log
+         * Example for changing state log for newly created driver to a Room
+         * based log
          */
         Cba9Factory.stateLog = roomCba9StateLog(this)
 
         /**
-         * Example for changing properties of CBA9 driver to limiting accepted banknotes to 20 and 100 Pesos
+         * Example for changing properties of CBA9 driver to limiting accepted
+         * banknotes to 20 and 100 Pesos
          */
-        Cba9Factory.cba9Props = Cba9Factory.cba9Props .copy(
-            acceptedDenominations = listOf(Denomination(20, CountryCode.PHP), Denomination(100, CountryCode.PHP)),
+        Cba9Factory.cba9Props = Cba9Factory.cba9Props.copy(
+            acceptedDenominations = listOf(
+                Denomination(20, CountryCode.PHP),
+                Denomination(100, CountryCode.PHP)
+            )
         )
 
         /**
          * Example for changing USB properties for newly created CBA9 driver
          */
-        Cba9Factory.cba9Props = Cba9Factory.cba9Props .copy(
+        Cba9Factory.cba9Props = Cba9Factory.cba9Props.copy(
             usbProps = Cba9Factory.cba9Props.usbProps.copy(
                 timeoutReceive = 3.seconds
             )
         )
 
+        // end::cba9factory-config[]
+
+        // tag::usbDeviceManager[]
         val usbManager = UsbDeviceManager()
         usbManager.start(this)
+        // end::usbDeviceManager[]
+
 
         monitorCba9Connection(usbManager)
 
-        monitorConnectedDrivers(usbManager)
+        monitorConnectedDrivers(usbManager, binding)
+
+        binding.buttonAcceptBanknote.setOnClickListener {
+            usbManager.getDriver(Cba9::class).onSuccess {
+                it.cba9Validator.value?.acceptBanknote()
+            }
+        }
+
+        binding.buttonRejectBanknote.setOnClickListener {
+            usbManager.getDriver(Cba9::class).onSuccess {
+                it.cba9Validator.value?.rejectBanknote()
+            }
+        }
 
     }
 
-    private fun monitorConnectedDrivers(usbManager: UsbDeviceManager) = lifecycleScope.launch {
-        usbManager.connectedDrivers.collect { drivers ->
-            if(drivers.isNotEmpty()) {
-                logger.info("Connected drivers: ${drivers.joinToString { it.preferredName }}")
+    // tag::monitor-connected-drivers[]
+    private fun monitorConnectedDrivers(usbManager: UsbDeviceManager, binding: ActivityMainBinding) =
+
+        lifecycleScope.launch {
+            var configUpdater: Job? = null
+            var statusUpdater: Job? = null
+
+            usbManager.connectedDrivers.collect { drivers ->
+                if (drivers.isNotEmpty()) {
+                    logger.info("Connected drivers: ${drivers.joinToString { it.preferredName }}")
+
+                    usbManager.getDriver(Cba9::class)
+                        .onSuccess { configUpdater = updateCba9ConfigData(it, binding) }
+                    usbManager.getDriver(Cba9::class)
+                        .onSuccess { statusUpdater = updateCba9Status(it, binding) }
+
+                } else {
+
+                    configUpdater?.cancelAndJoin()
+                    statusUpdater?.cancelAndJoin()
+                }
             }
+        }
+    // end::monitor-connected-drivers[]
+
+    private fun updateCba9ConfigData(cba9: Cba9, binding: ActivityMainBinding) = lifecycleScope.launch {
+
+        try {
+            cba9.cba9Validator.filterNotNull().collect {
+                binding.textViewProtocolVersionValue.text = it.configData.protocolVersion.toString()
+                binding.textViewSerialNumberValue.text = it.serialNumber.value.toString()
+                binding.textViewDataSetVersionValue.text = it.datasetVersion.datasetVersion
+            }
+        } finally {
+            binding.textViewProtocolVersionValue.text = getString(R.string.na)
+            binding.textViewSerialNumberValue.text = getString(R.string.na)
+            binding.textViewDataSetVersionValue.text = getString(R.string.na)
         }
     }
 
+    private fun updateCba9Status(cba9: Cba9, binding: ActivityMainBinding) = lifecycleScope.launch {
+
+        try {
+            cba9.cba9Validator.filterNotNull().collect { iCba9Validator ->
+                iCba9Validator.state.collect { stateHolder ->
+                    binding.textViewCba9StateValue.text = stateHolder.stringify()
+                    binding.textViewBanknote.text = if (stateHolder.denomination.countryCode == CountryCode.UNKNOWN) {
+                        "${cba9.cba9Validator.value?.configData?.countryCode ?: getString(R.string.na)}\n0"
+                    } else {
+                        "${stateHolder.denomination.countryCode}\n${stateHolder.denomination.denomination}"
+                    }
+                }
+            }
+        } finally {
+            binding.textViewCba9StateValue.text = getString(R.string.na)
+            binding.textViewBanknote.text = "${cba9.cba9Validator.value?.configData?.countryCode ?: getString(R.string.na)}"
+
+        }
+    }
+
+    // tag::fillLevel[]
+    private fun updateCba9FillLevel(cba9: Cba9, binding: ActivityMainBinding) =
+        lifecycleScope.launch {
+
+        cba9.cba9Validator.filterNotNull().collect {
+            val currency = it.configData.countryCode
+
+            it.cashbox.levels.collect { levelHolder ->
+
+                binding.textViewFillLevelValue.text =
+                    getString(
+                        R.string.fillLevel,
+                        currency.countryCode,
+                        levelHolder.banknoteValue,
+                        levelHolder.banknoteCount
+                    )
+            }
+        }
+    }
+    // end::fillLevel[]
+
+
     private fun monitorCba9Connection(usbManager: UsbDeviceManager) = lifecycleScope.launch {
+
 
         usbManager.getAttachmentEvents<Cba9>().collect { event ->
 

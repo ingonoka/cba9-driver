@@ -1,0 +1,91 @@
+= Library for managing CBA9 Banknote Validators
+
+The library is meant for Android devices that are connected via USB to a CBA9 banknote validator.
+
+The validator is expected to support the SSP(TM) protocol.
+
+== Setup
+Include the latest library version in your `gradle.build` dependency block
+
+[source,Groovy]
+----
+implementation "com.ingonoka:cba9-driver:v0.1-0-g1af64e1"
+----
+
+== Usage
+
+=== Configuration of the CBA9 Driver Factory
+
+Before starting the USB device manager, which will create and attach a driver to a connected CBA, set the configuration of newly created drivers, by changing the `stateLog` and `cba9Props` properties of the `Cba9Factory`.
+
+This can be done also when the USB device manager is already running, but changes will only take effect when the CBA9 is disconnected and then reconnected again.
+
+[source,kotling,indent=0]
+----
+include::cba9driverdemo/src/main/kotlin/com/ingonoka/cba9driverdemo/MainActivity.kt[tag=cba9factory-config]
+----
+
+=== Start USB Device Manager
+
+Once the USB device manager has been started, it will attempt to attach a driver for a CBA9 that is already connected or that is connected (plugged-in) later.
+
+TIP The `logcat` may show an error for an already connected device,  but usually the second attempt to attach a driver will succeed.
+
+[source,kotlin,indent=0]
+----
+include::cba9driverdemo/src/main/kotlin/com/ingonoka/cba9driverdemo/MainActivity.kt[tag=usbDeviceManager]
+----
+
+=== Monitor Driver Connection and Disconnection Events
+
+Collect the `connectedDrivers` state flow to get the CBA9 driver. The driver is added to the list of connected drivers for a newly connected CBA9, and removed when the CBA9 is disconnected.
+
+The actual validator object is provided in a state flow managed by the driver.
+
+IMPORTANT
+The validator object will not be immediately available when the driver is published in the `connectedDrivers` state flow (see <<Use the CBA Validator>>)
+
+[source,kotlin,indent=0]
+----
+include::cba9driverdemo/src/main/kotlin/com/ingonoka/cba9driverdemo/MainActivity.kt[tag=monitor-connected-drivers]
+----
+
+=== Use the CBA Validator
+
+==== Monitor the validator status
+
+The `state` flow of the validator provides information about the current status, such as whether the validator is scanning/stacking/rejecting a banknote or whether a banknote is currently in escrow.
+
+[source,kotlin,indent=0]
+----
+cba9.cba9Validator.filterNotNull().collect { iCba9Validator ->
+    iCba9Validator.state.collect { stateHolder ->
+       when (stateHolder.state) {
+            Cba9ValidatorState.UNDEFINED -> TODO()
+            Cba9ValidatorState.DISCONNECTED -> TODO()
+            Cba9ValidatorState.FAILURE -> TODO()
+            Cba9ValidatorState.INITIALIZING -> TODO()
+            Cba9ValidatorState.SCANNING -> TODO()
+            Cba9ValidatorState.NOTE_IN_ESCROW -> TODO()
+            Cba9ValidatorState.REJECTING -> TODO()
+            Cba9ValidatorState.STACKING -> TODO()
+            Cba9ValidatorState.STACKING_CREDITED -> TODO()
+            Cba9ValidatorState.READY -> TODO()
+            Cba9ValidatorState.UNSAFE_JAM -> TODO()
+            Cba9ValidatorState.DISABLED -> TODO()
+            Cba9ValidatorState.INHIBITED -> TODO()
+            Cba9ValidatorState.CASHBOX_FULL -> TODO()
+       }
+    }
+}
+----
+
+
+==== Monitor cashbox fill levels
+
+The validator object contains a cashbox property which manages a fill level state flow.  Collect the `levels` state flow to get the latest fill levels of the banknote acceptor.
+
+[source,kotlin,indent=0]
+----
+include::cba9driverdemo/src/main/kotlin/com/ingonoka/cba9driverdemo/MainActivity.kt[tag=fillLevel]
+----
