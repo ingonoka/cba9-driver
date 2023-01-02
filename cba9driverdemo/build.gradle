@@ -9,6 +9,8 @@ repositories {
 }
 
 android {
+    namespace 'com.ingonoka.cba9driverdemo'
+
     compileSdk android_compile_sdk_version.toInteger()
 //    buildToolsVersion android_build_tools_version
 
