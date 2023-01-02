@@ -22,7 +22,31 @@ This can be done also when the USB device manager is already running, but change
 
 [source,kotling,indent=0]
 ----
-include::cba9driverdemo/src/main/kotlin/com/ingonoka/cba9driverdemo/MainActivity.kt[tag=cba9factory-config]
+/**
+ * Example for changing state log for newly created driver to a Room
+ * based log
+ */
+Cba9Factory.stateLog = roomCba9StateLog(this)
+
+/**
+ * Example for changing properties of CBA9 driver to limiting accepted
+ * banknotes to 20 and 100 Pesos
+ */
+Cba9Factory.cba9Props = Cba9Factory.cba9Props.copy(
+    acceptedDenominations = listOf(
+        Denomination(20, CountryCode.PHP),
+        Denomination(100, CountryCode.PHP)
+    )
+)
+
+/**
+ * Example for changing USB properties for newly created CBA9 driver
+ */
+Cba9Factory.cba9Props = Cba9Factory.cba9Props.copy(
+    usbProps = Cba9Factory.cba9Props.usbProps.copy(
+        timeoutReceive = 3.seconds
+    )
+)
 ----
 
 === Start USB Device Manager
@@ -33,7 +57,8 @@ TIP The `logcat` may show an error for an already connected device,  but usually
 
 [source,kotlin,indent=0]
 ----
-include::cba9driverdemo/src/main/kotlin/com/ingonoka/cba9driverdemo/MainActivity.kt[tag=usbDeviceManager]
+val usbManager = UsbDeviceManager()
+usbManager.start(this)
 ----
 
 === Monitor Driver Connection and Disconnection Events
@@ -47,7 +72,28 @@ The validator object will not be immediately available when the driver is publis
 
 [source,kotlin,indent=0]
 ----
-include::cba9driverdemo/src/main/kotlin/com/ingonoka/cba9driverdemo/MainActivity.kt[tag=monitor-connected-drivers]
+private fun monitorConnectedDrivers(usbManager: UsbDeviceManager, binding: ActivityMainBinding) =
+
+    lifecycleScope.launch {
+        var configUpdater: Job? = null
+        var statusUpdater: Job? = null
+
+        usbManager.connectedDrivers.collect { drivers ->
+            if (drivers.isNotEmpty()) {
+                logger.info("Connected drivers: ${drivers.joinToString { it.preferredName }}")
+
+                usbManager.getDriver(Cba9::class)
+                    .onSuccess { configUpdater = updateCba9ConfigData(it, binding) }
+                usbManager.getDriver(Cba9::class)
+                    .onSuccess { statusUpdater = updateCba9Status(it, binding) }
+
+            } else {
+
+                configUpdater?.cancelAndJoin()
+                statusUpdater?.cancelAndJoin()
+            }
+        }
+    }
 ----
 
 === Use the CBA Validator
@@ -87,5 +133,22 @@ The validator object contains a cashbox property which manages a fill level stat
 
 [source,kotlin,indent=0]
 ----
-include::cba9driverdemo/src/main/kotlin/com/ingonoka/cba9driverdemo/MainActivity.kt[tag=fillLevel]
+private fun updateCba9FillLevel(cba9: Cba9, binding: ActivityMainBinding) =
+    lifecycleScope.launch {
+
+    cba9.cba9Validator.filterNotNull().collect {
+        val currency = it.configData.countryCode
+
+        it.cashbox.levels.collect { levelHolder ->
+
+            binding.textViewFillLevelValue.text =
+                getString(
+                    R.string.fillLevel,
+                    currency.countryCode,
+                    levelHolder.banknoteValue,
+                    levelHolder.banknoteCount
+                )
+        }
+    }
+}
 ----
