@@ -11,10 +11,10 @@ package com.ingonoka.cba9driver
 
 import android.hardware.usb.UsbDevice
 import com.ingonoka.cba9driver.command.*
-import com.ingonoka.cba9driver.data.CountryCode.*
-import com.ingonoka.cba9driver.event.*
+import com.ingonoka.cba9driver.event.ChannelEnabled
+import com.ingonoka.cba9driver.event.Enabled
+import com.ingonoka.cba9driver.event.Synced
 import com.ingonoka.cba9driver.response.GenericResponseCode.*
-import com.ingonoka.cba9driver.response.GenericResponseCode.UNKNOWN
 import com.ingonoka.cba9driver.response.GetCountersResponseData
 import com.ingonoka.cba9driver.response.PollResponseData
 import com.ingonoka.cba9driver.response.SspResponse
@@ -25,13 +25,11 @@ import com.ingonoka.cba9driver.util.takeIfIsInstance
 import com.ingonoka.usbmanager.IUsbDeviceAdapter
 import com.ingonoka.usbmanager.IUsbTransceiver
 import com.ingonoka.usbmanager.UsbDriver
-import com.ingonoka.usbmanager.enums.UsbDeviceAdapterLivecycleStates.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import org.slf4j.LoggerFactory
-import java.util.*
 import java.util.concurrent.TimeoutException
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration
@@ -63,7 +61,6 @@ interface ICba9 : Stringifiable {
      * The CBA9 keeps its own counters for the number of banknotes that have been stacked or rejected.  The counters
      * are not automatically reset when the cashbox is emptied.
      */
-    @Suppress("unused")
     suspend fun resetCashboxCounters(time: Instant): Result<Unit>
 
     /**
@@ -316,7 +313,6 @@ class Cba9(
      * The CBA9 keeps its own counters for the number of banknotes that have been stacked or rejected.  The counters
      * are not automatically reset when the cashbox is emptied.
      */
-    @Suppress("unused")
     override suspend fun resetCashboxCounters(time: Instant): Result<Unit> = try {
 
         cba9Validator.value?.cashbox?.setEmpty(time) ?: throw Exception("No validator")

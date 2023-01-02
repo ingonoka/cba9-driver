@@ -354,7 +354,6 @@ fun ByteArray.toLong(index: Int = 0): Result<Long> =
  * Convert a [ULong] to a [UByteArray]. The resulting array only has as many bytes as are necessary to store all bits
  * without any leading zero bytes.
  */
-@Suppress("DuplicatedCode")
 @ExperimentalUnsignedTypes
 fun ULong.toByteArrayWithoutLeadingZeros(): Result<UByteArray> = Result.success(
     when {

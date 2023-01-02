@@ -7,8 +7,6 @@
  *
  */
 
-@file:Suppress("unused")
-
 package com.ingonoka.usbmanager
 
 import android.hardware.usb.UsbConstants

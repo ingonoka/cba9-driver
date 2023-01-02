@@ -14,6 +14,7 @@ import android.content.Context
 import android.content.Intent
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import com.ingonoka.usbmanager.utils.getUsbDevice
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.runBlocking
 
@@ -32,7 +33,16 @@ class UsbPermissionBroadcastReceiver(
     override fun onReceive(context: Context?, intent: Intent?) {
 
         runBlocking {
-            val device = intent?.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
+
+            val device = intent?.getUsbDevice()
+
+//            if (Build.VERSION.SDK_INT >= 33) {
+//                intent?.getParcelableExtra("DATA", UsbDevice::class.java)
+//            } else {
+//                @Suppress("DEPRECATION")
+//                intent?.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+//            }
+//            val device = intent?.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
 
             if (ACTION_USB_PERMISSION == intent?.action && device == usbDevice)
                 sendChannel.send(intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false))

@@ -342,15 +342,6 @@ class Cba9Validator(
 
                 if (events.isNotEmpty()) {
 
-//                    if (events.size == 1) {
-//                        processEvent(events[0])
-//                    } else {
-//                        when (events.last()) {
-//                            is AcceptedNote -> processEvent(events.last())
-//                            else -> events.forEach { processEvent(it) }
-//                        }
-//                    }
-
                     events.forEach { processEvent(it) }
 
                     when (state.value.state) {
