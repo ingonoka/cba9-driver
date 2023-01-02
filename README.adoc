@@ -10,8 +10,9 @@ The validator is expected to support the SSP(TM) protocol.
 Include the latest library version in your `gradle.build` dependency block
 
 [source,Groovy]
+.Replace `latest`[placeholder with the latest release version]
 ----
-implementation "com.ingonoka:cba9-driver:v0.1-0-g1af64e1"
+implementation "com.ingonoka:cba9-driver:latest"
 ----
 
 == Usage
