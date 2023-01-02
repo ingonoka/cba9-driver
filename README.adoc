@@ -1,5 +1,7 @@
 = Library for managing CBA9 Banknote Validators
 
+image:https://img.shields.io/github/v/tag/ingonoka/cba9-driver?label=Latest[GitHub tag (latest by date)]
+
 The library is meant for Android devices that are connected via USB to a CBA9 banknote validator.
 
 The validator is expected to support the SSP(TM) protocol.
