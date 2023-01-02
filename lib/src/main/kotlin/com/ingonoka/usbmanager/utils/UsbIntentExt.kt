@@ -12,9 +12,15 @@ package com.ingonoka.usbmanager.utils
 import android.content.Intent
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.os.Build
 
 /**
  * Convenience function to retrieve the usb device from an extra of an intent. Purely for readability reasons.
  */
-fun Intent.getUsbDevice(): UsbDevice? = this.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+fun Intent.getUsbDevice(): UsbDevice? = if (Build.VERSION.SDK_INT >= 33) {
+    getParcelableExtra("DATA", UsbDevice::class.java)
+} else {
+    @Suppress("DEPRECATION")
+    getParcelableExtra(UsbManager.EXTRA_DEVICE)
+}
 
