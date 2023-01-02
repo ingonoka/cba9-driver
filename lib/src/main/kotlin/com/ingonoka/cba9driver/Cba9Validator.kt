@@ -300,33 +300,32 @@ class Cba9Validator(
             cashbox.setFull()
         }
 
-        val currentState = _state.value
+        val currentStateHolder = _state.value
 
-        val newState = stateTable[currentState.state]?.get(event::class)
-            ?: throw Exception("Unexpected event ${event.stringify(true)} in state ${currentState.stringify(true)}")
+        val newState = stateTable[currentStateHolder.state]?.get(event::class)
+            ?: throw Exception("Unexpected event ${event.stringify(true)} in state ${currentStateHolder.stringify(true)}")
 
-        val denomination = if (newState == READY && currentState.state == READY) {
+        val denomination = if (newState == READY && currentStateHolder.state == READY) {
             Denomination(0, CountryCode.UNKNOWN)
-        } else if (newState == STACKING && currentState.state in listOf(NOTE_IN_ESCROW, STACKING)) {
-            currentState.denomination
+        } else if (newState == STACKING && currentStateHolder.state in listOf(NOTE_IN_ESCROW, STACKING)) {
+            currentStateHolder.denomination
         } else {
             event.denomination
         }
 
-        val newStateHolder = Cba9ValidatorStateHolder(Clock.System.now(), newState, denomination)
+        val timeOfStateChange = if (currentStateHolder.state == newState) currentStateHolder.timeOfStateChange else Clock.System.now()
 
-        _stateFlow.emit(newStateHolder)
+        val newStateHolder = Cba9ValidatorStateHolder(timeOfStateChange, newState, denomination)
 
-        if (currentState.state != newState && currentState.denomination != denomination) {
-            logger.trace("CBA9 state transition: ${currentState.state.name} + ${event.sspEventCode.name} = ${newState.name}")
-        }
-
-        if (currentState.state != newState) {
-            logger.debug(
-                "BNA State change: ${currentState.stringify(true)} (${event.stringify(true)}) -> ${state.value.stringify(true)}"
+        if (currentStateHolder != newStateHolder) {
+            logger.trace(
+                "Cba9 in state ${currentStateHolder.state.name}, received ${event.sspEventCode.name}, transitioned to ${newState.name}"
             )
-            _state.emit(newStateHolder)
+
+            _stateFlow.emit(newStateHolder)
+            _state.update { newStateHolder }
         }
+
 
         Result.success(newState)
 
