@@ -1,13 +1,10 @@
-//buildscript {
-//    apply from: '../../common-versions/versions/versions_own.gradle'
-//    apply from: '../../common-versions/versions/versions_external.gradle'
-//}
-
 plugins {
     id 'com.android.library'
-    id 'kotlin-android'
+    id "org.jetbrains.kotlin.android"
+//    id 'kotlin-android'
     id 'kotlin-kapt'
     id 'maven-publish'
+    id 'signing'
     id 'org.asciidoctor.jvm.convert'
     id 'org.jetbrains.dokka'
 }
@@ -18,15 +15,17 @@ repositories {
     mavenLocal()
 }
 
-//apply from: '../../common-versions/versioning.gradle'
+ext.admin = hasProperty('sonatypeUsername')
 
+project.ext.versionCode = getVersionCode()
+version = getVersionName()
+group = domain
 
 android {
 
     namespace 'com.ingonoka.cba9driver'
 
     compileSdk android_compile_sdk_version.toInteger()
-//    buildToolsVersion android_build_tools_version
 
     defaultConfig {
 
@@ -39,7 +38,7 @@ android {
     }
 
     buildTypes {
-        release  {
+        release {
             debuggable = false
         }
         debug {
@@ -53,6 +52,15 @@ android {
 
     kotlinOptions {
         jvmTarget = '1.8'
+//        freeCompilerArgs += ['-Xdebug']
+    }
+
+    publishing {
+        multipleVariants {
+            withSourcesJar()
+            withJavadocJar()
+            allVariants()
+        }
     }
 }
 
@@ -71,6 +79,23 @@ dependencies {
 tasks.register("sourceJar", Jar) {
     from android.sourceSets.main.kotlin.srcDirs
     classifier 'sources'
+}
+
+tasks.register('dokkaJar', Jar) {
+    dependsOn(dokkaHtml)
+    from dokkaHtml.outputDirectory
+}
+
+dokkaJar.dependsOn(dokkaHtml)
+
+artifacts {
+    archives dokkaJar
+}
+
+
+// See configuration on ~/.gradle/gradle.properties
+signing {
+    sign(publishing.publications)
 }
 
 afterEvaluate {
@@ -96,23 +121,30 @@ publishing {
         pom {
             name = 'CBA9 Banknote Acceptor Driver Library'
             description = 'A library implementing the SSP protocol for CBA9 Banknopte Acceptors'
+            url = 'https://github.com/ingonoka/cba9-driver'
             licenses {
                 license {
                     name = pom_licenseName
                     url = pom_licenseUrl
                 }
             }
+            scm {
+                connection = 'scm:git:git@github.com:ingonoka/cba9-driver'
+                developerConnection = 'scm:git:git@github.com:ingonoka/cba9-driver'
+                url = 'https://github.com/ingonoka/cba9-driver'
+            }
             developers { developer { name = pom_developer } }
         }
     }
 
     repositories {
+
         maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/ingonoka/cba9-driver")
+            name = "Sonatype"
+            url = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
             credentials {
-                username = System.getenv("USERNAME")
-                password = System.getenv("TOKEN")
+                username = sonatype_uid
+                password = sonatype_pw
             }
         }
     }
