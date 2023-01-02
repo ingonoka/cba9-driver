@@ -18,6 +18,7 @@ import com.ingonoka.cba9driver.util.WriteIntBuffer
 import com.ingonoka.usbmanager.IUsbTransceiver
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 /**
@@ -25,11 +26,11 @@ import org.slf4j.LoggerFactory
  *
  */
 sealed class SspCommand(
-    val sspCommandCode: SspCommandCode,
+    private val sspCommandCode: SspCommandCode,
     val data: List<Int> = listOf()
 ) : Stringifiable {
 
-    val logger = LoggerFactory.getLogger(this::class.java.name)
+    val logger: Logger? = LoggerFactory.getLogger(this::class.java.name)
 
     companion object {
         /**
@@ -83,7 +84,7 @@ sealed class SspCommand(
 
         }.onSuccess {
 
-            logger.trace("Run ${this.stringify()} -> ${it.stringify()}")
+            logger?.trace("Run ${this.stringify()} -> ${it.stringify()}")
         }
 
     } catch (e: Exception) {

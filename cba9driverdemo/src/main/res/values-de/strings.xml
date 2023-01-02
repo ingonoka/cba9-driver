@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <!--
   ~ Copyright (c) 2022. Ingo Noka
   ~ This file belongs to project cba9-driver.
@@ -9,13 +10,12 @@
 
 <resources>
     <string name="app_name">CBA9 Driver Demo</string>
-    <string name="cba9StateLabel">CBA9 State</string>
-    <string name="fillLevelLabel">Fill Level</string>
-    <string name="serialNumberLabel">Serial Number</string>
+    <string name="cba9StateLabel">CBA9 Status</string>
+    <string name="fillLevelLabel">Füllstand</string>
+    <string name="serialNumberLabel">Seriennummer</string>
     <string name="datasetVersionLabel">Data Set Version</string>
-    <string name="protocolVersionLabel">Protocol Version</string>
-    <string name="rejectBanknoteButton">Reject</string>
-    <string name="acceptBanknoteButton">Accept</string>
+    <string name="protocolVersionLabel">Protokollversion</string>
+    <string name="rejectBanknoteButton">Ablehnen</string>
+    <string name="acceptBanknoteButton">Aktzeptieren</string>
     <string name="na">N/A</string>
-    <string name="fillLevel" translatable="false">%1$s %2$d / (%3$d)</string>
 </resources>

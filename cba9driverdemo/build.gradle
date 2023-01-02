@@ -28,6 +28,7 @@ android {
         targetSdkVersion android_target_sdk_version.toInteger()
         versionCode = getVersionCode()
         versionName = version
+        resConfigs 'en','de'
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
