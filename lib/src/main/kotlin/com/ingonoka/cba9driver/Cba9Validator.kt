@@ -45,7 +45,7 @@ interface ICba9Validator : Stringifiable {
     /**
      * Publish a list of events. Note that the list will be published as is.  The events are not published individually.
      */
-    fun publishEvents(events: List<SspEvent>)
+    suspend fun processEvents(events: List<SspEvent>): Result<Cba9ValidatorState>
 
     /**
      * Publish [event] in a list with a single item
@@ -150,7 +150,7 @@ class Cba9Validator(
     /**
      * Observe this flow to get validator events
      */
-    override val eventsFlow = _eventsFlow.asSharedFlow()
+    override val eventsFlow: SharedFlow<List<SspEvent>> = _eventsFlow.asSharedFlow()
 
     /**
      * Determines what is done with a banknote that is already in Escrow or moved into Escrow.
@@ -277,8 +277,20 @@ class Cba9Validator(
         banknoteInstruction.value = REJECT
     }
 
-    override fun publishEvents(events: List<SspEvent>) {
-        _eventsFlow.tryEmit(events)
+    override suspend fun processEvents(events: List<SspEvent>): Result<Cba9ValidatorState> = try {
+
+        val result = events.fold(UNDEFINED) { _, event -> processEvent(event).getOrThrow() }
+
+        when (result) {
+            NOTE_IN_ESCROW -> if (banknoteInstruction.value !in listOf(ACCEPT, REJECT)) banknoteInstruction.update { HOLD }
+            else -> banknoteInstruction.update { NONE }
+        }
+
+        Result.success(result)
+
+    } catch (e: Exception) {
+
+        Result.failure(e)
     }
 
     override fun publishEvent(event: SspEvent) {
@@ -339,16 +351,14 @@ class Cba9Validator(
 
             eventsFlow.collect { events ->
 
-                if (events.isNotEmpty()) {
+                events.forEach { processEvent(it) }
 
-                    events.forEach { processEvent(it) }
-
-                    when (state.value.state) {
-                        NOTE_IN_ESCROW -> if (banknoteInstruction.value !in listOf(ACCEPT, REJECT)) banknoteInstruction.update { HOLD }
-                        else -> banknoteInstruction.update { NONE }
-                    }
+                when (state.value.state) {
+                    NOTE_IN_ESCROW -> if (banknoteInstruction.value !in listOf(ACCEPT, REJECT)) banknoteInstruction.update { HOLD }
+                    else -> banknoteInstruction.update { NONE }
                 }
             }
+
         }
     }
 

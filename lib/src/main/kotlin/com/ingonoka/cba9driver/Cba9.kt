@@ -182,16 +182,16 @@ class Cba9(
             datasetVersion = datasetVersion
         )
 
-        newCba9Validator.start()
+//        newCba9Validator.start()
 
         _cba9Validator.update {
             logger.trace("Updating cbaValidator property")
             newCba9Validator
         }
 
-        newCba9Validator.publishEvent(Synced())
+        newCba9Validator.processEvents(listOf(Synced()))
 
-        pollAndPublish(newCba9Validator)
+//        pollAndProcess(newCba9Validator)
 
         adapter.setInhibits(configData.bankNoteDenominations, props.acceptedDenominations).getOrThrow()
 
@@ -354,17 +354,10 @@ class Cba9(
         }
     }
 
-    private suspend fun pollAndPublish(validator: Cba9Validator): PollResponseData =
+    private suspend fun pollAndProcess(validator: Cba9Validator): PollResponseData =
         adapter.poll(validator)
-            .onSuccess {
-//                if (it.eventList.intersect(listOf(Cba9ValidatorState.SCANNING, Cba9ValidatorState.NOTE_IN_ESCROW)).isNotEmpty()) {
-//                    validator.banknoteInstruction.compareAndSet(BanknoteInstruction.NONE, BanknoteInstruction.HOLD)
-//                }
-                validator.publishEvents(it.eventList)
-            }
-            .onFailure {
-                logger.warn("Failed poll command: ${it.combineAllMessages(",")}")
-            }
+            .onSuccess { validator.processEvents(it.eventList) }
+            .onFailure { logger.warn("Failed poll command: ${it.combineAllMessages(",")}") }
             .getOrThrow()
 
     private suspend fun sendCommand(validator: Cba9Validator, instruction: BanknoteInstruction) {
@@ -379,11 +372,11 @@ class Cba9(
 
             BanknoteInstruction.REJECT -> {
                 adapter.ejectBanknote().onFailure { logger.warn("Failed REJECT execution", it) }
-                pollAndPublish(validator)
+                pollAndProcess(validator)
             }
 
             BanknoteInstruction.ACCEPT, BanknoteInstruction.NONE -> {
-                pollAndPublish(validator)
+                pollAndProcess(validator)
             }
         }
     }
