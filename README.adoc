@@ -12,7 +12,7 @@ Include the latest library version in your `gradle.build` dependency block
 [source,Groovy]
 .Replace the `latest` placeholder with the latest release version
 ----
-implementation "com.ingonoka:cba9-driver:latest"
+implementation "com.ingonoka:cba9-driver:<latest>"
 ----
 
 == Usage
