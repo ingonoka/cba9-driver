@@ -75,7 +75,6 @@ android {
     }
 }
 
-
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${providers.gradleProperty("coroutines_version").get()}")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:${providers.gradleProperty("coroutines_version").get()}")
@@ -86,6 +85,11 @@ dependencies {
     implementation("androidx.room:room-ktx:${providers.gradleProperty("room_version").get()}")
     kapt("androidx.room:room-compiler:${providers.gradleProperty("room_version").get()}")
 
+}
+
+// See configuration on ~/.gradle/gradle.properties
+signing {
+    sign(publishing.publications)
 }
 
 afterEvaluate {
