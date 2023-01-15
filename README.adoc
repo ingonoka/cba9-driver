@@ -15,6 +15,18 @@ Include the latest library version in your `gradle.build` dependency block
 implementation "com.ingonoka:cba9-driver:<latest>"
 ----
 
+=== Hardware
+
+The CBA9 is a banknote acceptor manufactured by https://www.innovative-technology.com[Innovate Technology] for the asian market. They will also provide a technical handbook that gives details on ellectrical and data connection as well as hardware setup.
+
+The CBA9 must be connected via an OTG cable to the android device.
+
+The problem is that most Android devices will not charge the device when in USB OTG mode. Usually, the provider of the Android device can change this default behaviour. The OTG cable will also likely have to be altered to get the power for charging from a separate charger.
+
+Of course the BNA cannot get its power from the Android device and will also need a separate connection for power.
+
+
+
 == Usage
 
 === Configuration of the CBA9 Driver Factory
