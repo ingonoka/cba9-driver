@@ -77,7 +77,7 @@ android {
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${providers.gradleProperty("coroutines_version").get()}")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:${providers.gradleProperty("coroutines_version").get()}")
-    implementation("org.jetbrains.kotlinx:kotlinx-datetime:${providers.gradleProperty("androidx_datetime_version").get()}")
+    implementation("org.jetbrains.kotlinx:kotlinx-datetime:${providers.gradleProperty("datetime_version").get()}")
 
     implementation("org.slf4j:slf4j-api:${providers.gradleProperty("slf4j_version").get()}")
 
