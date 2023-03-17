@@ -4,9 +4,14 @@ image:https://img.shields.io/github/v/tag/ingonoka/cba9-driver?label=Latest[GitH
 
 The library is meant for Android devices that are connected via USB to a CBA9 banknote validator.
 
-The validator is expected to support the SSP(TM) protocol.
+The validator is expected to be configured for the SSP(TM) protocol (the device supports other protocols as well).
+
+== Limitation
+The library does not support the optional encryption provided in the SSP(TM) protocol.
 
 == Setup
+
+=== Software
 Include the latest library version in your `gradle.build` dependency block
 
 [source,Groovy]
@@ -17,9 +22,9 @@ implementation "com.ingonoka:cba9-driver:<latest>"
 
 === Hardware
 
-The CBA9 is a banknote acceptor manufactured by https://www.innovative-technology.com[Innovate Technology] for the asian market. They will also provide a technical handbook that gives details on ellectrical and data connection as well as hardware setup.
+The CBA9 is a banknote acceptor manufactured by https://www.innovative-technology.com[Innovate Technology] for the Asian market. The device comes with a technical handbook that gives details on power and data connection as well as hardware setup. The handbook also explains how to configure the device for the SSP(TM) protocol.
 
-The CBA9 must be connected via an OTG cable to the android device.
+The CBA9 must be connected via an OTG cable to the Android device.
 
 The problem is that most Android devices will not charge the device when in USB OTG mode. Usually, the provider of the Android device can change this default behaviour. The OTG cable will also likely have to be altered to get the power for charging from a separate charger.
 
@@ -31,11 +36,14 @@ Of course the BNA cannot get its power from the Android device and will also nee
 
 === Configuration of the CBA9 Driver Factory
 
-Before starting the USB device manager, which will create and attach a driver to a connected CBA, set the configuration of newly created drivers, by changing the `stateLog` and `cba9Props` properties of the `Cba9Factory`.
+Before starting the USB device manager, which will create and attach a driver to a connected CBA, set the configuration that will be applied to newly created drivers.
+
+The configuration is set by changing the `stateLog` and `cba9Props` properties of the `Cba9Factory`.
 
 This can be done also when the USB device manager is already running, but changes will only take effect when the CBA9 is disconnected and then reconnected again.
 
 [source,kotling,indent=0]
+.Sample configuration setting
 ----
 /**
  * Example for changing state log for newly created driver to a Room
@@ -66,11 +74,12 @@ Cba9Factory.cba9Props = Cba9Factory.cba9Props.copy(
 
 === Start USB Device Manager
 
-Once the USB device manager has been started, it will attempt to attach a driver for a CBA9 that is already connected or that is connected (plugged-in) later.
+CBA9 drivers are instantiated by the USB device manager. Once the USB device manager has been started, it will attempt to create and attach a driver for a CBA9 that is already connected or that will be connected (plugged-in) later.
 
 TIP The `logcat` may show an error for an already connected device,  but usually the second attempt to attach a driver will succeed.
 
 [source,kotlin,indent=0]
+.Start of the USB device manager
 ----
 val usbManager = UsbDeviceManager()
 usbManager.start(this)
@@ -78,34 +87,26 @@ usbManager.start(this)
 
 === Monitor Driver Connection and Disconnection Events
 
-Collect the `connectedDrivers` state flow to get the CBA9 driver. The driver is added to the list of connected drivers for a newly connected CBA9, and removed when the CBA9 is disconnected.
+You need to collect the `connectedDrivers` state flow to get the CBA9 driver. This state flow holds a list of connected drivers. A driver is added to the list of connected drivers for a newly connected CBA9, and removed when the CBA9 is disconnected.
 
-The actual validator object is provided in a state flow managed by the driver.
-
-IMPORTANT
-The validator object will not be immediately available when the driver is published in the `connectedDrivers` state flow (see <<Use the CBA Validator>>)
+The CBA0 driver provides access to actual validator object in a state flow. The application has to wait for the validator object to be published  before it can communicate to the device (see <<Use the CBA Validator>>).
 
 [source,kotlin,indent=0]
+.Sample monitoring of CBA9 connections
 ----
 private fun monitorConnectedDrivers(usbManager: UsbDeviceManager, binding: ActivityMainBinding) =
 
     lifecycleScope.launch {
-        var configUpdater: Job? = null
-        var statusUpdater: Job? = null
 
         usbManager.connectedDrivers.collect { drivers ->
             if (drivers.isNotEmpty()) {
-                logger.info("Connected drivers: ${drivers.joinToString { it.preferredName }}")
+
+                logger.info("List of connected drivers changed")
 
                 usbManager.getDriver(Cba9::class)
-                    .onSuccess { configUpdater = updateCba9ConfigData(it, binding) }
-                usbManager.getDriver(Cba9::class)
-                    .onSuccess { statusUpdater = updateCba9Status(it, binding) }
+                    .onSuccess { /* New CBA9 connection */ }
+                    .onFailure { /* Some other device was connected or CBA9 was lost */ }
 
-            } else {
-
-                configUpdater?.cancelAndJoin()
-                statusUpdater?.cancelAndJoin()
             }
         }
     }
@@ -118,7 +119,9 @@ private fun monitorConnectedDrivers(usbManager: UsbDeviceManager, binding: Activ
 The `state` flow of the validator provides information about the current status, such as whether the validator is scanning/stacking/rejecting a banknote or whether a banknote is currently in escrow.
 
 [source,kotlin,indent=0]
+.Sample monitoring of validator object provided by the driver
 ----
+/* cba9 is a driver provided by the connected Drivers flow of the USB device manager */
 cba9.cba9Validator.filterNotNull().collect { iCba9Validator ->
     iCba9Validator.state.collect { stateHolder ->
        when (stateHolder.state) {
@@ -141,12 +144,16 @@ cba9.cba9Validator.filterNotNull().collect { iCba9Validator ->
 }
 ----
 
+If a banknote is in escrow, the validator will hold it there. The application can instruct the validator to reject or accept the banknote by calling `rejectBanknote()` or `acceptBanknote()`. If either function is called when no banknote is in escrow, then the banknote will be immediately rejected or accepted when it enters into escrow.
+
+
 
 ==== Monitor cashbox fill levels
 
 The validator object contains a cashbox property which manages a fill level state flow.  Collect the `levels` state flow to get the latest fill levels of the banknote acceptor.
 
 [source,kotlin,indent=0]
+.Sample monitoring of the cashbox state
 ----
 private fun updateCba9FillLevel(cba9: Cba9, binding: ActivityMainBinding) =
     lifecycleScope.launch {
