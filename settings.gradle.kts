@@ -9,3 +9,15 @@
 
 rootProject.name = "cba9-driver"
 include(":lib", ":cba9driverdemo")
+
+pluginManagement {
+    val asciidoctorVersion: String by settings
+    val dokkaVersion: String by settings
+
+    plugins {
+        id("org.asciidoctor.jvm.convert") version asciidoctorVersion
+        id("org.jetbrains.dokka") version dokkaVersion
+
+    }
+
+}

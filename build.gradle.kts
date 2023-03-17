@@ -17,7 +17,7 @@ buildscript {
     dependencies {
         classpath("com.android.tools.build:gradle:${project.properties["android_gradle_plugin_version"].toString()}")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${project.properties["kotlin_version"].toString()}")
-        classpath("org.asciidoctor:asciidoctor-gradle-jvm:3.1.0")//${project.properties["asciidoctor_version"].toString()}")
+        classpath("org.asciidoctor:asciidoctor-gradle-jvm:3.3.2")//${project.properties["asciidoctor_version"].toString()}")
     }
 }
 
@@ -25,8 +25,8 @@ buildscript {
 plugins {
 
 //    id("maven-publish")
-    id("org.asciidoctor.jvm.convert") version "${project.properties["asciidoctor_version"].toString()}"
-    id("org.jetbrains.dokka") version "${project.properties["dokka_version"].toString()}"
+    id("org.asciidoctor.jvm.convert")
+    id("org.jetbrains.dokka")
 //    id("org.jetbrains.kotlin.android") version "${project.properties["kotlin_version"].toString()}"
 //    id 'com.android.application' version '7.0.4' apply false
 }
@@ -51,7 +51,7 @@ fun getVersionName() = try {
     stdout.toString().trim()
 } catch (e: Exception) {
     println(e.message)
-    null
+    "na"
 }
 
 extra.apply {
