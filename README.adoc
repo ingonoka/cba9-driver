@@ -89,7 +89,7 @@ usbManager.start(this)
 
 You need to collect the `connectedDrivers` state flow to get the CBA9 driver. This state flow holds a list of connected drivers. A driver is added to the list of connected drivers for a newly connected CBA9, and removed when the CBA9 is disconnected.
 
-The CBA0 driver provides access to actual validator object in a state flow. The application has to wait for the validator object to be published  before it can communicate to the device (see <<Use the CBA Validator>>).
+The CBA0 driver manages a validator object in a state flow. When the driver is created it will first intsantiate a validator object and then use it to send a number of configuration commands to the CBA9. This will take a couple of seconds, which means that the application has to wait for the validator object to be published by the driver before it can communicate with the device (see <<Use the CBA Validator>>).
 
 [source,kotlin,indent=0]
 .Sample monitoring of CBA9 connections
@@ -119,9 +119,15 @@ private fun monitorConnectedDrivers(usbManager: UsbDeviceManager, binding: Activ
 The `state` flow of the validator provides information about the current status, such as whether the validator is scanning/stacking/rejecting a banknote or whether a banknote is currently in escrow.
 
 [source,kotlin,indent=0]
-.Sample monitoring of validator object provided by the driver
+.Sample monitoring of the validator object provided by the driver
 ----
-/* cba9 is a driver provided by the connected Drivers flow of the USB device manager */
+/**
+ *  cba9 is the driver provided by the connected Drivers flow of the USB
+ * device manager. The `cba9.cba9validator` state floww will contain null at
+ *  first. The `filterNotNull` will wait for the validator object to
+ * be published, before collecting its state.
+ */
+
 cba9.cba9Validator.filterNotNull().collect { iCba9Validator ->
     iCba9Validator.state.collect { stateHolder ->
        when (stateHolder.state) {
@@ -144,13 +150,13 @@ cba9.cba9Validator.filterNotNull().collect { iCba9Validator ->
 }
 ----
 
-If a banknote is in escrow, the validator will hold it there. The application can instruct the validator to reject or accept the banknote by calling `rejectBanknote()` or `acceptBanknote()`. If either function is called when no banknote is in escrow, then the banknote will be immediately rejected or accepted when it enters into escrow.
+The CBA9 can hold one banknote in escrow, from where it can either be moved into the cash box or returned to the user. When a banknote is successfully validated, it will first be moved into the escrow position.  The CBA9 will hold it there and wait for instructions. The application can instruct the validator to reject or accept the banknote by calling `rejectBanknote()` or `acceptBanknote()`. If either function is called when no banknote is in escrow, then the driver is put into this state and the banknote will be immediately rejected or accepted as soon as it enters into escrow.
 
 
 
-==== Monitor cashbox fill levels
+==== Monitor Cash Box Fill Levels
 
-The validator object contains a cashbox property which manages a fill level state flow.  Collect the `levels` state flow to get the latest fill levels of the banknote acceptor.
+The validator object contains a `cashbox` property which manages a fill level state flow.  You can collect the `levels` state flow of this property to get the latest fill levels of the banknote acceptor. Note that there is no way for the driver to know how much money is in the cash box when it starts up. The fill level will therefore only reflect the correct amount when emptying the cash box is recorded by calling the `setEmpty` driver function
 
 [source,kotlin,indent=0]
 .Sample monitoring of the cashbox state
@@ -174,3 +180,15 @@ private fun updateCba9FillLevel(cba9: Cba9, binding: ActivityMainBinding) =
     }
 }
 ----
+
+=== Manage the validator status log
+
+The validator keeps a status log, which includes banknote acceptance events, recording of hardware counters and cash collection events. The library comes with an implementation of a status log that is based on a Room database.
+
+The status log keeps track of  accepted banknotes automatically. However, the user of the library has to ensure that counters kept by the actual device and any cash box collection (emptying) is recorded by calling the functions `updateDeviceCounters` and `emptyCashbox` respectively.
+
+The `updateDeviceCounters` function logs the counters as read from the device with the `getCounters` SSP command.  This would usually be a good idea at startup and after the cashbox was emptied. The log entries can be used to check the integrity of the banknote counters.
+
+There is a function `audit`, which compares the counters kept by the state log with the counters read from the device itself. Calling this function will tell you whether the CBA9 was in use while the driver wasn't running. It is also a good idea to call this function right after calling `updateDeviceCounters`. This should be done on startup and on a regular basis to monitor the correct function of the driver and the device.
+
+Failed audits will be logged and can be reviewed.
