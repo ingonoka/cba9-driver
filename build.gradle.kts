@@ -17,7 +17,7 @@ buildscript {
     dependencies {
         classpath("com.android.tools.build:gradle:${project.properties["android_gradle_plugin_version"].toString()}")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${project.properties["kotlin_version"].toString()}")
-        classpath("org.asciidoctor:asciidoctor-gradle-jvm:3.3.2")//${project.properties["asciidoctor_version"].toString()}")
+        classpath("org.asciidoctor:asciidoctor-gradle-jvm:4.0.2")//${project.properties["asciidoctor_version"].toString()}")
     }
 }
 
