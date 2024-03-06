@@ -12,7 +12,8 @@
 plugins {
     id("com.android.library")
     id("kotlin-android")
-    id("kotlin-kapt")
+//    id("kotlin-kapt")
+    id("com.google.devtools.ksp")
     id("maven-publish")
     id("signing")
     id("org.asciidoctor.jvm.convert")
@@ -33,7 +34,6 @@ android {
     defaultConfig {
 
         minSdk = project.properties["android_min_sdk_version"].toString().toInt()
-        targetSdk = project.properties["android_target_sdk_version"].toString().toInt()
         resourceConfigurations.addAll(listOf("en", "de"))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -82,7 +82,8 @@ dependencies {
     implementation("org.slf4j:slf4j-api:${providers.gradleProperty("slf4j_version").get()}")
 
     implementation("androidx.room:room-ktx:${providers.gradleProperty("room_version").get()}")
-    kapt("androidx.room:room-compiler:${providers.gradleProperty("room_version").get()}")
+//    kapt("androidx.room:room-compiler:${providers.gradleProperty("room_version").get()}")
+    ksp("androidx.room:room-compiler:${providers.gradleProperty("room_version").get()}")
 
 }
 
@@ -105,7 +106,7 @@ afterEvaluate {
 
             register<MavenPublication>("debug") {
                 groupId = "com.ingonoka"
-                artifactId = "cba9driver"
+                artifactId = "cba9driver-debug"
                 version = version.toString()
 
                 from(components["debug"])
@@ -148,13 +149,22 @@ afterEvaluate {
                         password = providers.gradleProperty("sonatype_pw").get()
                     }
                 }
+
+                maven {
+                    name = "GitHubPackages"
+                    url = uri("https://maven.pkg.github.com/ingonoka/cba9-driver")
+                    credentials {
+                        username = project.findProperty("gpr.user") as String? ?: System.getenv("USERNAME")
+                        password = project.findProperty("gpr.key") as String? ?: System.getenv("TOKEN")
+                    }
+                }
             }
         }
     }
 }
 
 tasks.dokkaHtmlPartial.configure {
-    outputDirectory.set(buildDir.resolve("$buildDir/dokka"))
+    outputDirectory.set(layout.buildDirectory.file("dokka").get().asFile)
     moduleName.set("NFC Adapter for Android")
     dokkaSourceSets {
         configureEach {

@@ -24,17 +24,19 @@ buildscript {
 
 plugins {
 
-//    id("maven-publish")
     id("org.asciidoctor.jvm.convert")
     id("org.jetbrains.dokka")
-//    id("org.jetbrains.kotlin.android") version "${project.properties["kotlin_version"].toString()}"
-//    id 'com.android.application' version '7.0.4' apply false
+    id("com.google.devtools.ksp")  version "1.8.10-1.0.9" apply false
 }
 
-fun getVersionCode() = try {
+/**
+ * Number of commits from the start of this repository
+ */
+fun getVersionCode(): Int = try {
     val stdout = ByteArrayOutputStream()
     exec {
-        commandLine = listOf("git", "rev-list", "--first-parent", "--count", "master")
+        commandLine =
+            listOf("git", "rev-list", "--first-parent", "--count", "master")
         standardOutput = stdout
     }
     Integer.parseInt(stdout.toString().trim())
@@ -42,7 +44,12 @@ fun getVersionCode() = try {
     -1
 }
 
-fun getVersionName() = try {
+/**
+ * Get a version name of the form "v0.3-8-g9518e52", which is the tag
+ * assigned to the commit (v0.3), the number of commits since the
+ * commit the tag is assigned to and the hash of the latest commit
+ */
+fun getVersionName(): String = try {
     val stdout = ByteArrayOutputStream()
     exec {
         commandLine = listOf("git", "describe", "--tags") //, '--long'
@@ -57,19 +64,25 @@ fun getVersionName() = try {
 extra.apply {
     set("domain", "com.ingonoka")
     set("pom_developer", "Ingo Noka")
-    set("pom_licenseName", "Attribution-NonCommercial-NoDerivatives 4.0 International (CC BY-NC-ND 4.0)")
-    set("pom_licenseUrl", "https://creativecommons.org/licenses/by-nc-nd/4.0/")
-    set("group","com.ingonoka")
-    set("versionName", getVersionName() ?: "na")
-    set("versionCode", getVersionCode() ?: 0)
+    set(
+        "pom_licenseName",
+        "Attribution-NonCommercial-NoDerivatives 4.0 International (CC BY-NC-ND 4.0)"
+    )
+    set(
+        "pom_licenseUrl",
+        "https://creativecommons.org/licenses/by-nc-nd/4.0/"
+    )
+    set("group", "com.ingonoka")
+    set("versionName", getVersionName())
+    set("versionCode", getVersionCode())
 }
 
 group = "com.ingonoka"
 
 
 tasks.dokkaHtmlMultiModule.configure {
-    outputDirectory.set(buildDir.resolve("$buildDir/dokka"))
-    moduleName.set("NFC Adapter for Android")
+    outputDirectory.set(layout.buildDirectory.file("dokka").get().asFile)
+    moduleName.set("CBA9 Driver for Android")
     includes.from("module.md")
 }
 
@@ -83,12 +96,5 @@ asciidoctorj {
 
 tasks {
     "asciidoctor"(AsciidoctorTask::class) {
-//        baseDirFollowsSourceDir()
-//        sourceDir = buildDir.resolve("docs")
-//        outputDir.set(buildDir.resolve("build/docs"))
-//
-//        attributes["source-highlighter"] = "rouge"
-//
-//        attributes["revnumber"] = getVersionName()
     }
 }

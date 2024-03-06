@@ -77,7 +77,7 @@ dependencies {
 
     implementation("org.slf4j:slf4j-api:${providers.gradleProperty("slf4j_version").get()}")
     implementation("com.github.tony19:logback-android:${providers.gradleProperty("logback_android_version").get()}")
-//    implementation "com.ingonoka:cba9-driver:v0.1-0-g1af64e1"
+    implementation("com.ingonoka:cba9driver:v0.3-8-g9518e52")
 
-    implementation(project(":lib"))
+//    implementation(project(":lib"))
 }
