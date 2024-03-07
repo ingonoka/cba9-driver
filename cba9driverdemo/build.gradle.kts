@@ -21,6 +21,7 @@ android {
     namespace = "com.ingonoka.cba9driverdemo"
 
     compileSdk = project.properties["android_compile_sdk_version"].toString().toInt()
+
 //    buildToolsVersion android_build_tools_version
 
     defaultConfig {
@@ -45,12 +46,12 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility =   JavaVersion.VERSION_1_8
-        targetCompatibility =  JavaVersion.VERSION_1_8
+        sourceCompatibility =   JavaVersion.VERSION_17 //VERSION_1_8
+        targetCompatibility =  JavaVersion.VERSION_17 //VERSION_1_8
     }
 
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
 
     buildFeatures {
@@ -77,7 +78,7 @@ dependencies {
 
     implementation("org.slf4j:slf4j-api:${providers.gradleProperty("slf4j_version").get()}")
     implementation("com.github.tony19:logback-android:${providers.gradleProperty("logback_android_version").get()}")
-    implementation("com.ingonoka:cba9driver:v0.3-8-g9518e52")
+    implementation("com.ingonoka:cba9driver:v0.4")
 
 //    implementation(project(":lib"))
 }
